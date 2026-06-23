@@ -5,3 +5,6 @@ dist/
 .env.local
 .DS_Store
 coverage/
+
+# Generated cell crops from `npm run dump`
+samples/cells/

@@ -11,7 +11,8 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/index.ts",
-    "solve": "tsx src/cli.ts",
+    "solve": "node --env-file-if-exists=.env --import tsx src/cli.ts",
+    "dump": "tsx src/debug-cli.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint . --ext .ts",

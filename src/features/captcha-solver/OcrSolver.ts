@@ -9,10 +9,31 @@
  *   5. Mark matches vs the target number.
  */
 import sharp from 'sharp';
-import { createWorker } from 'tesseract.js';
+import { createWorker, PSM } from 'tesseract.js';
 import { DEFAULT_GRID, centerOf, splitIntoCells } from '../../core/grid.js';
 import { digitsOnly, isMatch } from '../../core/text.js';
 import type { Cell, CaptchaSolution, Solver, SolveInput } from '../../core/types.js';
+
+/** How much to upscale each cell crop before OCR — small digits read far better enlarged. */
+const UPSCALE = 3;
+
+/**
+ * Preprocess a single cell crop to give Tesseract its best chance:
+ * grayscale -> upscale -> normalize contrast -> binarize (threshold).
+ * Captchas are noisy/colored; OCR wants big, high-contrast black-on-white.
+ */
+async function preprocessCell(
+  image: Buffer,
+  box: { x: number; y: number; width: number; height: number },
+): Promise<Buffer> {
+  return sharp(image)
+    .extract({ left: box.x, top: box.y, width: box.width, height: box.height })
+    .grayscale()
+    .resize({ width: box.width * UPSCALE, height: box.height * UPSCALE, fit: 'fill' })
+    .normalize()
+    .threshold(140) // binarize: drop background texture, keep the strokes
+    .toBuffer();
+}
 
 export class OcrSolver implements Solver {
   readonly name = 'ocr' as const;
@@ -34,16 +55,17 @@ export class OcrSolver implements Solver {
     const boxes = splitIntoCells(width, height, grid);
     const worker = await createWorker('eng');
     try {
-      await worker.setParameters({ tessedit_char_whitelist: '0123456789' });
+      await worker.setParameters({
+        tessedit_char_whitelist: '0123456789',
+        // Treat each cell as a single line of text, not a page/paragraph.
+        // This stops the "Line cannot be recognized" failures on small crops.
+        tessedit_pageseg_mode: PSM.SINGLE_LINE,
+      });
 
       const cells: Cell[] = [];
       for (let index = 0; index < boxes.length; index++) {
         const box = boxes[index]!;
-        const cropped = await sharp(input.image)
-          .extract({ left: box.x, top: box.y, width: box.width, height: box.height })
-          .grayscale()
-          .normalize()
-          .toBuffer();
+        const cropped = await preprocessCell(input.image, box);
 
         const { data } = await worker.recognize(cropped);
         const value = digitsOnly(data.text);
