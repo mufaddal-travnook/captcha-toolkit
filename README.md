@@ -64,9 +64,11 @@ src/
     captcha-solver/         # FEATURE 1 (Solver contract lives in core/types.ts)
       OcrSolver.ts          # method A
       OpenAiSolver.ts       # method B
+      prompt.ts             # dedicated OpenAI prompt (tune without touching solver)
       index.ts              # createSolver() factory — pick by name
   cli.ts                    # run a solver against an image file
   index.ts                  # public package surface
+samples/                    # << put your captcha.png input images here
 tests/                      # independent unit tests per piece
 ```
 
@@ -85,15 +87,17 @@ cp .env.example .env   # only needed for the OpenAI solver
 
 ## Usage (CLI)
 
+Put your captcha image in [`samples/`](samples/) as `captcha.png` (the default the CLI reads), or pass any path with `--image`.
+
 ```bash
-# Method A — OCR
-npm run solve -- --image ./samples/captcha.png --target 447 --solver ocr
+# Method A — OCR (reads samples/captcha.png by default)
+npm run solve -- --target 447 --solver ocr
 
 # Method B — OpenAI (requires OPENAI_API_KEY)
-npm run solve -- --image ./samples/captcha.png --target 447 --solver openai
+npm run solve -- --target 447 --solver openai
 
-# Custom grid
-npm run solve -- --image ./grid.png --target 447 --rows 3 --cols 3 --solver ocr
+# Explicit path / custom grid
+npm run solve -- --image ./samples/other.png --target 447 --rows 3 --cols 3 --solver ocr
 ```
 
 ## Usage (programmatic)

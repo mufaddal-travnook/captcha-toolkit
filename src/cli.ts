@@ -2,12 +2,16 @@
  * Minimal CLI to run a solver against an image file.
  *
  * Usage:
- *   npm run solve -- --image ./samples/captcha.png --target 447 --solver ocr
- *   npm run solve -- --image ./samples/captcha.png --target 447 --solver openai
+ *   npm run solve -- --target 447 --solver ocr             # reads samples/captcha.png
+ *   npm run solve -- --image ./samples/foo.png --solver openai
  */
 import { readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { createSolver } from './features/captcha-solver/index.js';
 import type { SolverName } from './core/types.js';
+
+/** Default input image, relative to the project root. */
+const DEFAULT_IMAGE = 'samples/captcha.png';
 
 interface Args {
   image: string;
@@ -23,13 +27,9 @@ function parseArgs(argv: string[]): Args {
     return i >= 0 ? argv[i + 1] : undefined;
   };
 
-  const image = get('--image');
-  if (!image) {
-    throw new Error('Missing --image <path>');
-  }
   const solver = (get('--solver') ?? 'ocr') as SolverName;
   return {
-    image,
+    image: get('--image') ?? DEFAULT_IMAGE,
     target: get('--target'),
     solver,
     rows: Number(get('--rows') ?? 3),
@@ -39,7 +39,10 @@ function parseArgs(argv: string[]): Args {
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
-  const image = await readFile(args.image);
+  const imagePath = resolve(process.cwd(), args.image);
+  const image = await readFile(imagePath).catch(() => {
+    throw new Error(`Could not read image at "${imagePath}". Put your captcha in samples/ or pass --image <path>.`);
+  });
   const solver = createSolver(args.solver);
 
   const solution = await solver.solve({

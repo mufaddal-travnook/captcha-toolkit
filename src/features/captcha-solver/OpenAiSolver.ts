@@ -10,6 +10,7 @@ import OpenAI from 'openai';
 import { DEFAULT_GRID, cellCount, centerOf, splitIntoCells } from '../../core/grid.js';
 import { digitsOnly, isMatch } from '../../core/text.js';
 import type { Cell, CaptchaSolution, Solver, SolveInput } from '../../core/types.js';
+import { buildSolvePrompt, SOLVE_SYSTEM_PROMPT } from './prompt.js';
 
 export interface OpenAiSolverOptions {
   apiKey?: string;
@@ -79,25 +80,14 @@ export class OpenAiSolver implements Solver {
   }
 
   private async readGrid(input: SolveInput, grid: typeof DEFAULT_GRID): Promise<VisionResult> {
-    const total = cellCount(grid);
     const dataUrl = `data:image/png;base64,${input.image.toString('base64')}`;
-    const targetHint = input.targetNumber
-      ? `The target number is "${input.targetNumber}".`
-      : 'Read the target number from the prompt text shown in the image.';
-
-    const prompt = [
-      `This is a ${grid.rows}x${grid.cols} grid captcha.`,
-      targetHint,
-      `Read the number printed in each cell, scanning left-to-right, top-to-bottom.`,
-      `Return ONLY JSON of the form:`,
-      `{"targetNumber":"<digits>","values":["<cell0>","<cell1>", ... ${total} entries]}`,
-      `Use digits only for each value. If a cell is unreadable, use "".`,
-    ].join(' ');
+    const prompt = buildSolvePrompt({ grid, targetNumber: input.targetNumber });
 
     const completion = await this.client.chat.completions.create({
       model: this.model,
       response_format: { type: 'json_object' },
       messages: [
+        { role: 'system', content: SOLVE_SYSTEM_PROMPT },
         {
           role: 'user',
           content: [
