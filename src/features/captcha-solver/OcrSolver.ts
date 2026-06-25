@@ -97,6 +97,59 @@ async function closeStrokes(binaryPng: Buffer): Promise<Buffer> {
 }
 
 /**
+ * Remove an underline bar from a black-on-white binary cell. Captchas often
+ * underline the digit; that wide horizontal ink run in the lower part of the
+ * cell merges with the glyphs and corrupts OCR (e.g. "855" -> "899"/"85").
+ *
+ * We scan the bottom 45% of rows for any row that is mostly ink across the
+ * width (a bar, not a digit stroke) and paint from the first such row downward
+ * white. Adapts to any underline thickness/position; leaves digits untouched.
+ */
+async function removeUnderline(binaryPng: Buffer): Promise<Buffer> {
+  const { data, info } = await sharp(binaryPng)
+    .grayscale()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const { width, height } = info;
+
+  // Per-row ink fraction across the full width.
+  const rowInk = new Array<number>(height).fill(0);
+  for (let y = 0; y < height; y++) {
+    let ink = 0;
+    for (let x = 0; x < width; x++) {
+      if (data[y * width + x]! < 128) ink++;
+    }
+    rowInk[y] = ink / width;
+  }
+
+  // A bar (solid OR dashed) spans most of the width. Solid rows read high ink;
+  // dashed rows read moderate ink but appear in the lower band where no digit
+  // body should be. Scan the bottom 45% for the first row that looks like a bar.
+  const scanStart = Math.floor(height * 0.55);
+  let barTop = -1;
+  for (let y = scanStart; y < height; y++) {
+    if (rowInk[y]! > 0.35) {
+      barTop = y;
+      break;
+    }
+  }
+  if (barTop < 0) return binaryPng;
+
+  const barH = height - barTop;
+  return sharp(binaryPng)
+    .composite([
+      {
+        input: {
+          create: { width, height: barH, channels: 3, background: { r: WHITE, g: WHITE, b: WHITE } },
+        },
+        top: barTop,
+        left: 0,
+      },
+    ])
+    .toBuffer();
+}
+
+/**
  * Preprocess a single cell crop to give Tesseract its best chance. Designed to
  * be VERSATILE across captcha styles (any digit color, pale/textured
  * backgrounds): inset to skip the tile border, denoise, per-cell Otsu with
@@ -137,27 +190,7 @@ export async function preprocessCell(image: Buffer, box: CellBox): Promise<Buffe
 
   // Repair broken strokes, then strip leftover speckles.
   const repaired = await closeStrokes(binaryPng);
-  let cleaned = await sharp(repaired).median(5).toBuffer();
-
-  // Some captchas underline the digit; that horizontal bar sits in the bottom
-  // strip and confuses OCR. Paint the bottom ~12% white to remove it.
-  const barH = Math.round(info.height * 0.12);
-  cleaned = await sharp(cleaned)
-    .composite([
-      {
-        input: {
-          create: {
-            width: info.width,
-            height: barH,
-            channels: 3,
-            background: { r: WHITE, g: WHITE, b: WHITE },
-          },
-        },
-        top: info.height - barH,
-        left: 0,
-      },
-    ])
-    .toBuffer();
+  const cleaned = await removeUnderline(await sharp(repaired).median(5).toBuffer());
 
   // Trim to the digit, pad generously, set DPI so Tesseract scales correctly.
   const pad = { top: 40, bottom: 40, left: 40, right: 40, background: { r: WHITE, g: WHITE, b: WHITE } };
@@ -173,28 +206,43 @@ export async function preprocessCell(image: Buffer, box: CellBox): Promise<Buffe
     );
 }
 
+/** One OCR attempt: the digits read and Tesseract's confidence (0..100). */
+export interface OcrRead {
+  text: string;
+  confidence: number;
+}
+
 /**
- * Pick the best digit read from several OCR attempts. Prefer a read whose
- * length equals the target's (most likely the correct full number); otherwise
- * take the most common read, breaking ties by length.
+ * Pick the best digit read from several OCR attempts, weighted by CONFIDENCE.
+ *
+ * Tesseract often returns the right answer under some page-seg modes and a
+ * wrong one under others (e.g. "855" @84 vs "833" @63). A plain frequency vote
+ * can tie and pick the wrong one, so we sum each distinct read's confidence and
+ * take the highest total. Reads matching the target's digit length are
+ * preferred (the background/partial reads are usually shorter).
  */
-export function pickBestRead(reads: string[], targetLen: number): string {
-  const nonEmpty = reads.filter((r) => r.length > 0);
+export function pickBestRead(reads: OcrRead[], targetLen: number): string {
+  // Drop empty reads and obvious noise (runs much longer than the target —
+  // these come from leftover speckle/underline fragments, never a real cell).
+  const maxLen = targetLen + 1;
+  const nonEmpty = reads.filter((r) => r.text.length > 0 && r.text.length <= maxLen);
   if (nonEmpty.length === 0) return '';
 
-  const exact = nonEmpty.filter((r) => r.length === targetLen);
+  const exact = nonEmpty.filter((r) => r.text.length === targetLen);
   const pool = exact.length > 0 ? exact : nonEmpty;
 
-  // Vote by frequency, tie-break by longer string.
-  const counts = new Map<string, number>();
-  for (const r of pool) counts.set(r, (counts.get(r) ?? 0) + 1);
+  // Sum confidence per distinct read; tie-break by length.
+  const scores = new Map<string, number>();
+  for (const r of pool) {
+    scores.set(r.text, (scores.get(r.text) ?? 0) + Math.max(1, r.confidence));
+  }
 
-  let best = pool[0]!;
+  let best = pool[0]!.text;
   let bestScore = -1;
-  for (const [value, count] of counts) {
-    const score = count * 100 + value.length;
-    if (score > bestScore) {
-      bestScore = score;
+  for (const [value, score] of scores) {
+    const tieAdjusted = score + value.length; // small nudge toward longer reads
+    if (tieAdjusted > bestScore) {
+      bestScore = tieAdjusted;
       best = value;
     }
   }
@@ -249,12 +297,12 @@ export class OcrSolver implements Solver {
         const box = boxes[index]!;
         const cropped = await preprocessCell(input.image, box);
 
-        const reads: string[] = [];
+        const reads: OcrRead[] = [];
         for (const w of [lstm, legacy]) {
           for (const psm of PSM_MODES) {
             await w.setParameters({ tessedit_pageseg_mode: psm });
             const { data } = await w.recognize(cropped);
-            reads.push(digitsOnly(data.text));
+            reads.push({ text: digitsOnly(data.text), confidence: data.confidence });
           }
         }
         const value = pickBestRead(reads, targetLen);

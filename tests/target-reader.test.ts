@@ -17,20 +17,24 @@ describe('extractTargetNumber', () => {
   });
 });
 
+const r = (text: string, confidence = 50) => ({ text, confidence });
+
 describe('pickBestRead', () => {
   it('prefers a read matching the target length', () => {
-    expect(pickBestRead(['43', '343', '3'], 3)).toBe('343');
+    expect(pickBestRead([r('43'), r('343'), r('3')], 3)).toBe('343');
   });
 
-  it('votes by frequency when multiple match the length', () => {
-    expect(pickBestRead(['343', '343', '345'], 3)).toBe('343');
+  it('weights by confidence, not just frequency', () => {
+    // "833" appears twice but at low confidence; "855" is higher-confidence.
+    const reads = [r('833', 63), r('833', 63), r('855', 84), r('855', 84)];
+    expect(pickBestRead(reads, 3)).toBe('855');
   });
 
   it('falls back to longest when none match the length', () => {
-    expect(pickBestRead(['4', '43', '3'], 3)).toBe('43');
+    expect(pickBestRead([r('4'), r('43'), r('3')], 3)).toBe('43');
   });
 
   it('returns empty when all reads are empty', () => {
-    expect(pickBestRead(['', ''], 3)).toBe('');
+    expect(pickBestRead([r(''), r('')], 3)).toBe('');
   });
 });
