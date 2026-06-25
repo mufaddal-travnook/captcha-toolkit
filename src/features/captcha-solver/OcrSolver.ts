@@ -38,9 +38,9 @@ const UPSCALE = 4;
  */
 export const DEFAULT_GRID_REGION: FractionalRegion = {
   left: 0.08,
-  top: 0.24,
+  top: 0.18,
   width: 0.84,
-  height: 0.52,
+  height: 0.56,
 };
 
 export interface OcrSolverOptions {
