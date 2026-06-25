@@ -10,7 +10,7 @@
  * on the full screenshot. The OpenAI solver is unaffected.
  */
 import sharp from 'sharp';
-import { createWorker, PSM } from 'tesseract.js';
+import { createWorker, OEM, PSM } from 'tesseract.js';
 import {
   DEFAULT_GRID,
   centerOf,
@@ -50,66 +50,118 @@ export interface OcrSolverOptions {
   target?: ReadTargetOptions;
 }
 
+/** White (background) and black (ink) constants for the binary working image. */
+const WHITE = 255;
+const BLACK = 0;
+
 /**
- * Preprocess a single cell crop to give Tesseract its best chance:
- * grayscale -> upscale -> normalize contrast -> binarize (threshold).
- * Captchas are noisy/colored; OCR wants big, high-contrast black-on-white.
+ * Binarize a grayscale cell using a per-cell Otsu threshold, always producing
+ * BLACK digits on a WHITE background regardless of the digit's original color.
+ *
+ * Key idea: the digit is a MINORITY of pixels (strokes are sparse vs the tile
+ * background). So after Otsu splits the histogram into two classes, whichever
+ * class has FEWER pixels is the ink — we paint that class black, the rest white.
+ * This removes any need to guess "is the digit dark or bright".
+ */
+function binarizeMinorityAsInk(gray: Uint8Array | Buffer, threshold: number): Buffer {
+  let belowCount = 0;
+  for (let i = 0; i < gray.length; i++) if (gray[i]! <= threshold) belowCount++;
+  const aboveCount = gray.length - belowCount;
+  // Minority class = ink. If fewer pixels are <= threshold, ink is the low side.
+  const inkIsLow = belowCount <= aboveCount;
+
+  const out = Buffer.allocUnsafe(gray.length);
+  for (let i = 0; i < gray.length; i++) {
+    const isLow = gray[i]! <= threshold;
+    const isInk = inkIsLow ? isLow : !isLow;
+    out[i] = isInk ? BLACK : WHITE;
+  }
+  return out;
+}
+
+/**
+ * Morphological CLOSE on a black-on-white binary image: dilate ink then erode,
+ * which reconnects broken/thin strokes without merging separate digits.
+ * Implemented with a blur + threshold pair (cheap, dependency-free).
+ */
+async function closeStrokes(binaryPng: Buffer): Promise<Buffer> {
+  // Input/output are BLACK ink on WHITE. Blurring spreads the black strokes
+  // outward; thresholding at a HIGH cutoff keeps any pixel that picked up some
+  // darkness, which thickens (dilates) the strokes and closes small gaps.
+  // A single mild dilate is safer than a full close here — it reconnects thin
+  // glyphs without the risk of merging adjacent digits.
+  return sharp(binaryPng)
+    .blur(1.2)
+    .threshold(225) // keep near-white as white; anything the blur darkened -> black ink
+    .toBuffer();
+}
+
+/**
+ * Preprocess a single cell crop to give Tesseract its best chance. Designed to
+ * be VERSATILE across captcha styles (any digit color, pale/textured
+ * backgrounds): inset to skip the tile border, denoise, per-cell Otsu with
+ * minority-as-ink, morphological close to repair strokes, speckle removal, then
+ * trim + pad + set DPI.
  */
 export async function preprocessCell(image: Buffer, box: CellBox): Promise<Buffer> {
-  // The digits are COLORED on a pale, near-neutral background. A FIXED grayscale
-  // threshold can't capture both near-black and bright-yellow digits at once.
-  // So we compute a PER-CELL Otsu threshold from this cell's own histogram,
-  // which adapts to whatever color the digit is.
-  //
-  // Crop inward to skip the rounded tile border/edges, which otherwise skew
-  // the per-cell histogram. Keep the central ~76% where the digit lives.
+  // Crop inward to skip the rounded tile border/edges, which skew the histogram.
   const inset = 0.12;
   const ix = box.x + Math.round(box.width * inset);
   const iy = box.y + Math.round(box.height * inset);
   const iw = Math.max(1, box.width - 2 * Math.round(box.width * inset));
   const ih = Math.max(1, box.height - 2 * Math.round(box.height * inset));
 
-  const gray = sharp(image)
+  // Saturation boost makes colored strokes darker than the pale background in
+  // grayscale; a strong median + blur erases the dotted texture so the
+  // background becomes a uniform light field before we threshold.
+  const { data: gray, info } = await sharp(image)
     .extract({ left: ix, top: iy, width: iw, height: ih })
     .resize({ width: iw * UPSCALE, height: ih * UPSCALE, fit: 'fill' })
-    .median(3) // suppress the dotted background texture before thresholding
-    .grayscale();
+    .modulate({ saturation: 1.6 })
+    .grayscale()
+    .median(7) // kill the dotted background texture
+    .blur(1.0)
+    .normalize()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
 
-  // Raw single-channel pixels -> compute the adaptive threshold.
-  const { data, info } = await gray.clone().raw().toBuffer({ resolveWithObject: true });
-  const threshold = otsuThreshold(data);
+  // Per-cell adaptive threshold -> black ink on white (minority class is ink).
+  const threshold = otsuThreshold(gray);
+  const binData = binarizeMinorityAsInk(gray, threshold);
 
-  // The digit occupies a SMALL fraction of the cell; the background is the
-  // majority. So whichever Otsu class is the minority IS the digit. Count how
-  // many pixels fall below the threshold: if the dark side is the majority, the
-  // digit is actually the BRIGHT side, so we must invert to get black-on-white.
-  let below = 0;
-  for (let i = 0; i < data.length; i++) if (data[i]! < threshold) below++;
-  const digitIsBrightClass = below > data.length / 2;
-
-  let pipeline = sharp(data, {
+  const binaryPng = await sharp(binData, {
     raw: { width: info.width, height: info.height, channels: info.channels },
-  }).threshold(threshold);
-  if (!digitIsBrightClass) {
-    // Dark digit -> threshold already makes it black-on-white. Good.
-  } else {
-    // Bright digit on darker background -> flip so the digit ends up black.
-    pipeline = pipeline.negate();
-  }
-  // Clean isolated speckles (median), then thicken strokes slightly so broken
-  // glyphs reconnect — blur + re-threshold acts as a light morphological close,
-  // which fixes digits Tesseract was dropping (e.g. reading "43" instead of
-  // "343").
-  const binarized = await sharp(await pipeline.png().toBuffer())
-    .median(5)
+  })
+    .png()
     .toBuffer();
 
-  // Trim surrounding whitespace to the digit's bounding box, then pad evenly.
-  // Centering the glyph with generous margins is what Tesseract expects.
-  // Declare a DPI (density) so Tesseract scales the glyph correctly — without
-  // it, it warns "Invalid resolution" and can miss digits.
-  const pad = { top: 40, bottom: 40, left: 40, right: 40, background: { r: 255, g: 255, b: 255 } };
-  return sharp(binarized)
+  // Repair broken strokes, then strip leftover speckles.
+  const repaired = await closeStrokes(binaryPng);
+  let cleaned = await sharp(repaired).median(5).toBuffer();
+
+  // Some captchas underline the digit; that horizontal bar sits in the bottom
+  // strip and confuses OCR. Paint the bottom ~12% white to remove it.
+  const barH = Math.round(info.height * 0.12);
+  cleaned = await sharp(cleaned)
+    .composite([
+      {
+        input: {
+          create: {
+            width: info.width,
+            height: barH,
+            channels: 3,
+            background: { r: WHITE, g: WHITE, b: WHITE },
+          },
+        },
+        top: info.height - barH,
+        left: 0,
+      },
+    ])
+    .toBuffer();
+
+  // Trim to the digit, pad generously, set DPI so Tesseract scales correctly.
+  const pad = { top: 40, bottom: 40, left: 40, right: 40, background: { r: WHITE, g: WHITE, b: WHITE } };
+  return sharp(cleaned)
     .trim({ threshold: 10 })
     .extend(pad)
     .withMetadata({ density: 150 })
@@ -117,7 +169,7 @@ export async function preprocessCell(image: Buffer, box: CellBox): Promise<Buffe
     .toBuffer()
     .catch(() =>
       // trim() throws if the image is all one color (blank cell) — fall back.
-      sharp(binarized).extend(pad).withMetadata({ density: 150 }).png().toBuffer(),
+      sharp(cleaned).extend(pad).withMetadata({ density: 150 }).png().toBuffer(),
     );
 }
 
@@ -176,15 +228,21 @@ export class OcrSolver implements Solver {
     const regionBox = regionToBox(this.gridRegion, width, height);
     const boxes = splitRegionIntoCells(regionBox, grid);
 
-    // Different page-seg modes read different cells; no single one wins on all.
-    // We OCR each cell under several modes and VOTE: prefer a read whose length
-    // matches the target's, else the longest digit string seen.
-    const PSM_MODES = [PSM.SINGLE_BLOCK, PSM.SINGLE_LINE, PSM.SINGLE_WORD];
+    // Stylized captcha fonts read differently under different page-seg modes
+    // AND different OCR engines. We OCR each cell across the cartesian product
+    // and VOTE: prefer a read whose length matches the target's, else the most
+    // common / longest digit string. More views => more robust across fonts.
+    const PSM_MODES = [PSM.SINGLE_BLOCK, PSM.SINGLE_LINE, PSM.SINGLE_WORD, PSM.RAW_LINE];
     const targetLen = digitsOnly(target).length;
 
-    const worker = await createWorker('eng');
+    // Two engines: default LSTM and the combined legacy+LSTM, which often reads
+    // decorative glyphs the LSTM alone misses.
+    const lstm = await createWorker('eng');
+    const legacy = await createWorker('eng', OEM.TESSERACT_LSTM_COMBINED);
     try {
-      await worker.setParameters({ tessedit_char_whitelist: '0123456789' });
+      for (const w of [lstm, legacy]) {
+        await w.setParameters({ tessedit_char_whitelist: '0123456789' });
+      }
 
       const cells: Cell[] = [];
       for (let index = 0; index < boxes.length; index++) {
@@ -192,10 +250,12 @@ export class OcrSolver implements Solver {
         const cropped = await preprocessCell(input.image, box);
 
         const reads: string[] = [];
-        for (const psm of PSM_MODES) {
-          await worker.setParameters({ tessedit_pageseg_mode: psm });
-          const { data } = await worker.recognize(cropped);
-          reads.push(digitsOnly(data.text));
+        for (const w of [lstm, legacy]) {
+          for (const psm of PSM_MODES) {
+            await w.setParameters({ tessedit_pageseg_mode: psm });
+            const { data } = await w.recognize(cropped);
+            reads.push(digitsOnly(data.text));
+          }
         }
         const value = pickBestRead(reads, targetLen);
 
@@ -218,7 +278,7 @@ export class OcrSolver implements Solver {
         solver: this.name,
       };
     } finally {
-      await worker.terminate();
+      await Promise.all([lstm.terminate(), legacy.terminate()]);
     }
   }
 }

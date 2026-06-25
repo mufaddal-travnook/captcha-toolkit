@@ -11,7 +11,7 @@ import { createSolver } from './features/captcha-solver/index.js';
 import type { SolverName } from './core/types.js';
 
 /** Default input image, relative to the project root. */
-const DEFAULT_IMAGE = 'samples/captcha.png';
+const DEFAULT_IMAGE = 'samples/newcaptcha.png';
 
 interface Args {
   image: string;

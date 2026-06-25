@@ -16,7 +16,7 @@ function get(argv: string[], flag: string): string | undefined {
 
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
-  const imageArg = get(argv, '--image') ?? 'samples/captcha.png';
+  const imageArg = get(argv, '--image') ?? 'samples/newcaptcha.png';
   const outArg = get(argv, '--out') ?? 'samples/cells';
   const rawOnly = argv.includes('--raw-only');
   const rows = Number(get(argv, '--rows') ?? 3);
