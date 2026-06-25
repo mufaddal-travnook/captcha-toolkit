@@ -6,13 +6,16 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import sharp from 'sharp';
-import { DEFAULT_GRID, splitIntoCells } from '../../core/grid.js';
-import type { Grid } from '../../core/types.js';
+import { DEFAULT_GRID, regionToBox, splitRegionIntoCells } from '../../core/grid.js';
+import type { FractionalRegion, Grid } from '../../core/types.js';
+import { DEFAULT_GRID_REGION, preprocessCell } from './OcrSolver.js';
 
 export interface DumpCellsOptions {
   /** Output directory for the crops. */
   outDir: string;
   grid?: Grid;
+  /** Grid region within the image (fractions). Defaults to the OCR solver's region. */
+  gridRegion?: FractionalRegion;
   /**
    * If true, also writes the preprocessed (grayscale/upscaled/binarized)
    * version next to each raw crop — i.e. what OCR actually sees.
@@ -20,18 +23,12 @@ export interface DumpCellsOptions {
   preprocessed?: boolean;
 }
 
-/** Same preprocessing the OCR solver applies, mirrored here for inspection. */
+/** Reuse the OCR solver's exact preprocessing so dumps match what OCR sees. */
 async function preprocess(
   image: Buffer,
   box: { x: number; y: number; width: number; height: number },
 ): Promise<Buffer> {
-  return sharp(image)
-    .extract({ left: box.x, top: box.y, width: box.width, height: box.height })
-    .grayscale()
-    .resize({ width: box.width * 3, height: box.height * 3, fit: 'fill' })
-    .normalize()
-    .threshold(140)
-    .toBuffer();
+  return preprocessCell(image, box);
 }
 
 /**
@@ -48,8 +45,20 @@ export async function dumpCells(image: Buffer, opts: DumpCellsOptions): Promise<
   }
 
   await mkdir(opts.outDir, { recursive: true });
-  const boxes = splitIntoCells(width, height, grid);
+  const regionBox = regionToBox(opts.gridRegion ?? DEFAULT_GRID_REGION, width, height);
+  const boxes = splitRegionIntoCells(regionBox, grid);
   const written: string[] = [];
+
+  // Also dump the whole grid region so you can verify the crop alignment.
+  const regionPath = join(opts.outDir, 'region.png');
+  await writeFile(
+    regionPath,
+    await sharp(image)
+      .extract({ left: regionBox.x, top: regionBox.y, width: regionBox.width, height: regionBox.height })
+      .png()
+      .toBuffer(),
+  );
+  written.push(regionPath);
 
   for (let index = 0; index < boxes.length; index++) {
     const box = boxes[index]!;

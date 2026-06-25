@@ -26,6 +26,22 @@ export interface Point {
   y: number;
 }
 
+/**
+ * A rectangular region expressed as fractions of the image (0..1).
+ * Lets us describe "the top instruction band" or "the grid area" without
+ * hardcoding pixels, so it works across image sizes.
+ */
+export interface FractionalRegion {
+  /** Left edge, 0..1. */
+  left: number;
+  /** Top edge, 0..1. */
+  top: number;
+  /** Width, 0..1. */
+  width: number;
+  /** Height, 0..1. */
+  height: number;
+}
+
 /** Result for one cell of the grid. */
 export interface Cell {
   /** Flat index, left-to-right, top-to-bottom (0-based). */

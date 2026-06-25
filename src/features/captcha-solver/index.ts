@@ -6,17 +6,18 @@
  * classes. Adding a new solver later = one new file + one case here.
  */
 import type { Solver, SolverName } from '../../core/types.js';
-import { OcrSolver } from './OcrSolver.js';
+import { OcrSolver, type OcrSolverOptions } from './OcrSolver.js';
 import { OpenAiSolver, type OpenAiSolverOptions } from './OpenAiSolver.js';
 
 export interface CreateSolverOptions {
+  ocr?: OcrSolverOptions;
   openai?: OpenAiSolverOptions;
 }
 
 export function createSolver(name: SolverName, opts: CreateSolverOptions = {}): Solver {
   switch (name) {
     case 'ocr':
-      return new OcrSolver();
+      return new OcrSolver(opts.ocr);
     case 'openai':
       return new OpenAiSolver(opts.openai);
     default: {
@@ -26,5 +27,11 @@ export function createSolver(name: SolverName, opts: CreateSolverOptions = {}): 
   }
 }
 
-export { OcrSolver } from './OcrSolver.js';
+export { OcrSolver, DEFAULT_GRID_REGION, type OcrSolverOptions } from './OcrSolver.js';
 export { OpenAiSolver } from './OpenAiSolver.js';
+export {
+  readTargetNumber,
+  extractTargetNumber,
+  DEFAULT_INSTRUCTION_REGION,
+  type ReadTargetOptions,
+} from './targetReader.js';
