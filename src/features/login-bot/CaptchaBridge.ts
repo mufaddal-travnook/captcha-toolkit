@@ -17,6 +17,7 @@ import type { Selectors } from './config.js';
 import { readVisibleTarget } from './fields.js';
 import { safeClick } from './safeClick.js';
 import { RetryableError } from './errors.js';
+import { createLogger, type Logger } from './logger.js';
 
 export interface CaptchaResult {
   target: string;
@@ -36,31 +37,41 @@ export async function solveCaptcha(
   page: Page,
   selectors: Selectors,
   solverName: SolverName,
+  log: Logger = createLogger(),
 ): Promise<CaptchaResult> {
   const frame = await getCaptchaFrame(page, selectors.captchaFrame);
+  log.info('Entered captcha iframe.');
 
   // 1. target number from the visible prompt label.
   const target = await readVisibleTarget(frame, selectors.promptLabel);
+  log.info(`Captcha prompt target number: ${target}`);
 
   // 2. wait for tiles, screenshot the grid container (single image).
-  await frame.locator(selectors.tileImage).first().waitFor({ state: 'visible' });
+  const tiles = frame.locator(selectors.tileImage);
+  await tiles.first().waitFor({ state: 'visible' });
+  const tileCount = await tiles.count();
   const gridImage = await frame.locator(selectors.gridContainer).first().screenshot();
+  log.info(`Captured grid (${tileCount} tiles, ${gridImage.length} bytes) for solving.`);
 
   // 3. solve (one OpenAI call for the whole grid).
   const solver = createSolver(solverName);
   const solution = await solver.solve({ image: gridImage, targetNumber: target });
+  const readValues = solution.cells.map((c) => c.value || '∅').join(', ');
+  log.info(`AI/OCR response → values: [${readValues}]`);
+  log.info(`AI/OCR matches for ${target}: [${solution.matches.join(', ')}]`);
 
   if (solution.matches.length === 0) {
     throw new RetryableError(`Solver found no tiles matching ${target}.`);
   }
 
   // 4. click each matching tile by index (discrete elements -> Select()).
-  const tiles = frame.locator(selectors.tileImage);
   for (const index of solution.matches) {
     await safeClick(frame, tiles.nth(index));
+    log.info(`Clicked tile #${index}.`);
   }
 
   // 5. submit selection (by visible text).
+  log.step('Clicking Submit Selection…');
   await safeClick(frame, frame.locator(selectors.submitSelection).first());
 
   // 6. success = "Verified!" message becomes visible.

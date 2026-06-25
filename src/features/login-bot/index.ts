@@ -8,6 +8,7 @@ import { launchBrowser } from './Browser.js';
 import { runLoginFlow, type Credentials, type LoginResult } from './LoginFlow.js';
 import { acquireLock } from './lock.js';
 import { FatalError } from './errors.js';
+import { createLogger } from './logger.js';
 import { DEFAULT_CONFIG, type LoginBotConfig } from './config.js';
 
 export interface RunLoginOptions {
@@ -19,6 +20,7 @@ export interface RunLoginOptions {
 
 export async function runLogin(opts: RunLoginOptions): Promise<LoginResult> {
   const config: LoginBotConfig = { ...DEFAULT_CONFIG, ...opts.config };
+  const log = createLogger();
 
   if (config.solver === 'openai' && !process.env.OPENAI_API_KEY) {
     throw new FatalError('OPENAI_API_KEY is required for the openai solver. Set it in .env.');
@@ -28,16 +30,19 @@ export async function runLogin(opts: RunLoginOptions): Promise<LoginResult> {
   }
 
   const lockPath = opts.lockPath ?? join(tmpdir(), 'bls-login-bot.lock');
+  log.step(`Acquiring single-instance lock: ${lockPath}`);
   const lock = await acquireLock(lockPath);
 
+  log.step(`Launching ${config.headed ? 'headed' : 'headless'} stealth Chrome…`);
   const { page, close } = await launchBrowser({
     headed: config.headed,
     timeoutMs: config.timeoutMs,
   });
 
   try {
-    return await runLoginFlow(page, config, opts.credentials);
+    return await runLoginFlow(page, config, opts.credentials, log);
   } finally {
+    log.info('Closing browser and releasing lock.');
     await close();
     await lock.release().catch(() => {});
   }
