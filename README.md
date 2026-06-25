@@ -135,14 +135,41 @@ console.log(solution.matches);                 // [0, 5, 8]
 console.log(solution.cells[0].center);         // { x: 50, y: 50 } -> clicker target
 ```
 
+## Feature 2 — login bot
+
+Automates logging into the BLS Spain portal: opens a stealth Chrome tab, fills
+the login form, solves the captcha (reusing Feature 1), and submits.
+
+```bash
+# Set BLS_EMAIL, BLS_PASSWORD, OPENAI_API_KEY in .env first
+npm run login                 # headed Chrome, OpenAI solver
+npm run login -- --solver ocr # native OCR instead
+npm run login -- --headless   # no visible window
+```
+
+**Design highlights** (`src/features/login-bot/`):
+- **playwright-extra + stealth** hides automation signals (legitimate login only).
+- **Honeypot-aware**: the form has 10 decoy email + 10 decoy password fields and
+  ~26 decoy captcha prompts — the bot fills/reads only the **visible** one at runtime.
+- **Captcha**: the grid lives in a same-origin iframe; tiles are discrete `<img>`
+  elements. We screenshot the grid (one OpenAI call), then click matching tiles
+  by index (`Select(id, this)`).
+- **Resilience**: fresh Chrome per run with guaranteed teardown (no zombies),
+  retryable-vs-fatal error taxonomy with backoff, loader/dialog waits before every
+  click, and a cross-platform lockfile so runs never overlap.
+
+> Built for automating **your own** login. It solves the captcha honestly and does
+> not bypass the portal's protections; hard blocks are reported, not evaded.
+
 ## Scripts
 
 | Script | Purpose |
 | --- | --- |
 | `npm run build` | Compile TypeScript to `dist/` |
 | `npm run dev` | Run `src/index.ts` with `tsx` |
-| `npm run solve` | Run the CLI solver |
+| `npm run solve` | Run the CLI captcha solver |
 | `npm run dump` | Dump grid cell crops to `samples/cells/` for inspection |
+| `npm run login` | Run the login bot |
 | `npm test` | Run unit tests (`vitest`) |
 | `npm run typecheck` | Type-check without emitting |
 

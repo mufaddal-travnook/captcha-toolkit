@@ -8,3 +8,8 @@ coverage/
 
 # Generated cell crops from `npm run dump`
 samples/cells/
+
+# Login-bot lockfile / Playwright traces
+*.lock
+test-results/
+playwright-report/

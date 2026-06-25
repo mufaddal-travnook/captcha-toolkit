@@ -1,0 +1,130 @@
+<div class="bg-mode shadow rounded-3 overflow-hidden p-3 col-md-5">
+                <div class="text-center">
+                    <img class="h-50px mb-2" src="/assets/images/logo.png" alt="logo">
+                </div>
+                <div class="pt-0">
+                    <form class="mt-1 text-start" method="post" data-ajax-begin="onAjaxBegin" data-ajax-complete="onAjaxComplete" data-ajax-failure="onAjaxFailed" data-ajax-success="onAjaxSuccess" data-ajax="true" data-ajax-method="POST" action="/Global/account/loginsubmit">
+                        <div class="validation-summary text-danger mb-3 validation-summary-valid" data-valmsg-summary="true"><ul><li style="display:none"></li>
+</ul></div>
+<div class="mb-3 position-relative fsgfhq gknxqdui omwqr qkcbdwit mezyffk ybzxvu lfarvh pmgkyzj sjbmc tuubn bgksg qozjrb tgacem">
+                                <label class="form-label" for="UserId1">Email<span class="required">*</span></label>
+                                <input autocomplete="off" id="UserId1" name="UserId1" class="form-control entry-disabled" type="text">
+                            </div><div class="mb-3 position-relative bgksg gqtqlummx cqhggro rzvgceu nrqxaxym jhqgwif xoyrhsvrx rbswf fnzwx jnjdws qsvklus dedjzi hclqeizl qhrvmrv fsgfhq kxtwkbxee qozjrb ybzxvu ktocsmorx qvteacdp omwqr xblqu fpvolwyp sjbmc wcgrxx bjquxm iokrwlf iyhooej tgacem lfarvh xfmmezd ciabccz pmgkyzj vykfsg ljiqtfhb bxahx gknxqdui yjggom ytkvfc mezyffk wxmxuw tmvstqkp hvcvbmw tuubn dxteq">
+                                <label class="form-label" for="UserId2">Email<span class="required">*</span></label>
+                                <input autocomplete="off" id="UserId2" name="UserId2" class="form-control entry-disabled" type="text">
+                            </div><div class="mb-3 position-relative gknxqdui xoyrhsvrx ytkvfc blvezzd yjggom dedjzi bgksg dxteq tuubn iyhooej hclqeizl xfmmezd ciabccz qsvklus gqtqlummx qvteacdp qhrvmrv lfarvh iokrwlf omwqr wxmxuw ljiqtfhb mezyffk tmvstqkp sjbmc pmgkyzj rzvgceu vykfsg fpvolwyp ybzxvu qozjrb jnjdws bxahx fsgfhq tgacem nrqxaxym">
+                                <label class="form-label" for="UserId3">Email<span class="required">*</span></label>
+                                <input autocomplete="off" id="UserId3" name="UserId3" class="form-control entry-disabled" required="" type="text">
+                            </div><div class="mb-3 position-relative ljiqtfhb fsgfhq nrqxaxym gknxqdui ybzxvu tgacem qozjrb ytkvfc tuubn yjggom rzvgceu ktocsmorx pmgkyzj qhrvmrv omwqr iyhooej tmvstqkp rbswf hvcvbmw hclqeizl bxahx fpvolwyp iokrwlf bjquxm dedjzi wxmxuw xblqu lfarvh ojcpz qvteacdp bgksg mezyffk qsvklus xoyrhsvrx gqtqlummx kxtwkbxee xfmmezd vykfsg ciabccz jnjdws fnzwx dxteq cqhggro wcgrxx sjbmc">
+                                <label class="form-label" for="UserId4">Email<span class="required">*</span></label>
+                                <input autocomplete="off" id="UserId4" name="UserId4" class="form-control entry-disabled" type="text">
+                            </div><div class="mb-3 position-relative ybzxvu snnzg gqtqlummx tmvstqkp fsgfhq bgksg qozjrb tgacem pmgkyzj lfarvh gknxqdui mezyffk omwqr hclqeizl sjbmc tuubn">
+                                <label class="form-label" for="UserId5">Email<span class="required">*</span></label>
+                                <input autocomplete="off" id="UserId5" name="UserId5" class="form-control entry-disabled" type="text">
+                            </div><div class="mb-3 position-relative tgacem sjbmc pmgkyzj omwqr dedjzi lfarvh mezyffk fsgfhq qozjrb wxmxuw ybzxvu gknxqdui gqtqlummx aknhysfmb hclqeizl yjggom tuubn ljiqtfhb bgksg qsvklus tmvstqkp">
+                                <label class="form-label" for="UserId6">Email<span class="required">*</span></label>
+                                <input autocomplete="off" id="UserId6" name="UserId6" class="form-control entry-disabled" type="text">
+                            </div><div class="mb-3 position-relative bgksg bmhhgmagj fsgfhq tgacem ybzxvu mezyffk lfarvh sjbmc tuubn gknxqdui qozjrb">
+                                <label class="form-label" for="UserId7">Email<span class="required">*</span></label>
+                                <input autocomplete="off" id="UserId7" name="UserId7" class="form-control entry-disabled" type="text">
+                            </div><div class="mb-3 position-relative gqtqlummx ljiqtfhb dxteq fsgfhq tuubn hclqeizl lfarvh gtvon bgksg ybzxvu wxmxuw omwqr ciabccz tgacem tmvstqkp xoyrhsvrx nrqxaxym pmgkyzj sjbmc yjggom dedjzi mezyffk qsvklus qozjrb gknxqdui">
+                                <label class="form-label" for="UserId8">Email<span class="required">*</span></label>
+                                <input autocomplete="off" id="UserId8" name="UserId8" class="form-control entry-disabled" type="text">
+                            </div><div class="mb-3 position-relative sjbmc lfarvh ybzxvu tmvstqkp pmgkyzj fsgfhq omwqr qozjrb mezyffk tgacem gknxqdui bgksg hclqeizl zfxwqiw tuubn">
+                                <label class="form-label" for="UserId9">Email<span class="required">*</span></label>
+                                <input autocomplete="off" id="UserId9" name="UserId9" class="form-control entry-disabled" type="text">
+                            </div><div class="mb-3 position-relative nrqxaxym gqtqlummx qozjrb jhqgwif tgacem dedjzi hclqeizl xfmmezd sjbmc omwqr ljiqtfhb dxteq fsgfhq pmgkyzj gknxqdui tuubn bgksg wxmxuw yjggom tmvstqkp qsvklus mezyffk xoyrhsvrx ciabccz lfarvh ybzxvu">
+                                <label class="form-label" for="UserId10">Email<span class="required">*</span></label>
+                                <input autocomplete="off" id="UserId10" name="UserId10" class="form-control entry-disabled" type="text">
+                            </div><div class="mb-3 position-relative hclqeizl fsgfhq ljiqtfhb qsvklus qyfsvxgcx yjggom lfarvh bgksg dedjzi tuubn ybzxvu gknxqdui nrqxaxym sjbmc ciabccz tgacem xoyrhsvrx tmvstqkp mezyffk pmgkyzj omwqr qozjrb gqtqlummx wxmxuw">
+	                            <label class="form-label" for="Password1">Password<span class="required">*</span></label>
+	                            <input autocomplete="off" id="Password1" name="Password1" class="form-control fakepassword entry-disabled" type="password">
+	                            <span class="position-absolute top-50 end-0 translate-middle-y p-0 mt-3">
+		                            <i class="fakepasswordicon fas fa-eye-slash cursor-pointer p-2" onclick="togglepwd();"></i>
+	                            </span>
+                                
+                            </div><div class="mb-3 position-relative fpvolwyp tgacem vykfsg qhrvmrv tmvstqkp gknxqdui qozjrb dedjzi yaxviz mezyffk tuubn lfarvh qsvklus xfmmezd fsgfhq wxmxuw ljiqtfhb sjbmc ybzxvu xoyrhsvrx yjggom rzvgceu nrqxaxym bgksg ciabccz dxteq iokrwlf omwqr gqtqlummx ytkvfc pmgkyzj hclqeizl">
+	                            <label class="form-label" for="Password2">Password<span class="required">*</span></label>
+	                            <input autocomplete="off" id="Password2" name="Password2" class="form-control fakepassword entry-disabled" type="password">
+	                            <span class="position-absolute top-50 end-0 translate-middle-y p-0 mt-3">
+		                            <i class="fakepasswordicon fas fa-eye-slash cursor-pointer p-2" onclick="togglepwd();"></i>
+	                            </span>
+                                
+                            </div><div class="mb-3 position-relative sjbmc bgksg qozjrb tuubn lfarvh gknxqdui fsgfhq tgacem mezyffk gmhmtz ybzxvu">
+	                            <label class="form-label" for="Password3">Password<span class="required">*</span></label>
+	                            <input autocomplete="off" id="Password3" name="Password3" class="form-control fakepassword entry-disabled" type="password">
+	                            <span class="position-absolute top-50 end-0 translate-middle-y p-0 mt-3">
+		                            <i class="fakepasswordicon fas fa-eye-slash cursor-pointer p-2" onclick="togglepwd();"></i>
+	                            </span>
+                                
+                            </div><div class="mb-3 position-relative omwqr qozjrb fsgfhq rzvgceu ybzxvu tmvstqkp mezyffk hmqisxzu tgacem ciabccz vykfsg sjbmc xfmmezd hclqeizl lfarvh gqtqlummx dxteq pmgkyzj dedjzi qhrvmrv wxmxuw qsvklus fpvolwyp gknxqdui iokrwlf nrqxaxym tuubn yjggom bgksg ljiqtfhb xoyrhsvrx ytkvfc">
+	                            <label class="form-label" for="Password4">Password<span class="required">*</span></label>
+	                            <input autocomplete="off" id="Password4" name="Password4" class="form-control fakepassword entry-disabled" type="password">
+	                            <span class="position-absolute top-50 end-0 translate-middle-y p-0 mt-3">
+		                            <i class="fakepasswordicon fas fa-eye-slash cursor-pointer p-2" onclick="togglepwd();"></i>
+	                            </span>
+                                
+                            </div><div class="mb-3 position-relative xblqu iokrwlf ybzxvu ciabccz gqtqlummx iyhooej omwqr jnjdws fsgfhq dedjzi bgksg vykfsg qsvklus rzvgceu qvteacdp sjbmc wxmxuw lfarvh fpvolwyp tuubn nrqxaxym tgacem dxteq hvcvbmw ytkvfc xfmmezd ktocsmorx xoyrhsvrx bxahx gknxqdui yjggom hclqeizl qozjrb qhrvmrv pmgkyzj tmvstqkp kxtwkbxee ljiqtfhb mezyffk zfxwqiw">
+	                            <label class="form-label" for="Password5">Password<span class="required">*</span></label>
+	                            <input autocomplete="off" id="Password5" name="Password5" class="form-control fakepassword entry-disabled" type="password">
+	                            <span class="position-absolute top-50 end-0 translate-middle-y p-0 mt-3">
+		                            <i class="fakepasswordicon fas fa-eye-slash cursor-pointer p-2" onclick="togglepwd();"></i>
+	                            </span>
+                                
+                            </div><div class="mb-3 position-relative ybzxvu fnzwx iokrwlf gknxqdui cqhggro rbswf dxteq qozjrb mezyffk yjggom ktocsmorx gqtqlummx nrqxaxym fpvolwyp xoyrhsvrx qhrvmrv ljiqtfhb bjquxm aknhysfmb bgksg kxtwkbxee jnjdws qvteacdp wcgrxx hvcvbmw tgacem ciabccz dedjzi vykfsg fsgfhq tmvstqkp hclqeizl lfarvh xfmmezd sjbmc ytkvfc rzvgceu pmgkyzj tuubn omwqr bxahx wxmxuw xblqu qsvklus iyhooej">
+	                            <label class="form-label" for="Password6">Password<span class="required">*</span></label>
+	                            <input autocomplete="off" id="Password6" name="Password6" class="form-control fakepassword entry-disabled" type="password">
+	                            <span class="position-absolute top-50 end-0 translate-middle-y p-0 mt-3">
+		                            <i class="fakepasswordicon fas fa-eye-slash cursor-pointer p-2" onclick="togglepwd();"></i>
+	                            </span>
+                                
+                            </div><div class="mb-3 position-relative tmvstqkp omwqr xfmbxcxt yjggom wxmxuw hclqeizl lfarvh tuubn xoyrhsvrx fsgfhq ciabccz tgacem ljiqtfhb mezyffk ybzxvu qsvklus qozjrb bgksg sjbmc pmgkyzj gknxqdui dedjzi nrqxaxym gqtqlummx">
+	                            <label class="form-label" for="Password7">Password<span class="required">*</span></label>
+	                            <input autocomplete="off" id="Password7" name="Password7" class="form-control fakepassword entry-disabled" type="password">
+	                            <span class="position-absolute top-50 end-0 translate-middle-y p-0 mt-3">
+		                            <i class="fakepasswordicon fas fa-eye-slash cursor-pointer p-2" onclick="togglepwd();"></i>
+	                            </span>
+                                
+                            </div><div class="mb-3 position-relative qozjrb ybzxvu mezyffk tgacem gmhmtz gknxqdui lfarvh sjbmc fsgfhq bgksg tuubn">
+	                            <label class="form-label" for="Password8">Password<span class="required">*</span></label>
+	                            <input autocomplete="off" id="Password8" name="Password8" class="form-control fakepassword entry-disabled" type="password">
+	                            <span class="position-absolute top-50 end-0 translate-middle-y p-0 mt-3">
+		                            <i class="fakepasswordicon fas fa-eye-slash cursor-pointer p-2" onclick="togglepwd();"></i>
+	                            </span>
+                                
+                            </div><div class="mb-3 position-relative fsgfhq iokrwlf ktocsmorx gqtqlummx ljiqtfhb ybzxvu wxmxuw ciabccz qozjrb xfmmezd xoyrhsvrx fpvolwyp mezyffk gknxqdui vozaq vykfsg qsvklus sjbmc jnjdws tmvstqkp nrqxaxym bxahx pmgkyzj hclqeizl bgksg tuubn rzvgceu qhrvmrv dxteq iyhooej qvteacdp lfarvh ytkvfc omwqr yjggom dedjzi tgacem">
+	                            <label class="form-label" for="Password9">Password<span class="required">*</span></label>
+	                            <input autocomplete="off" id="Password9" name="Password9" class="form-control fakepassword entry-disabled" type="password">
+	                            <span class="position-absolute top-50 end-0 translate-middle-y p-0 mt-3">
+		                            <i class="fakepasswordicon fas fa-eye-slash cursor-pointer p-2" onclick="togglepwd();"></i>
+	                            </span>
+                                
+                            </div><div class="mb-3 position-relative fsgfhq tmvstqkp smpukp lfarvh vykfsg pmgkyzj dxteq nrqxaxym ciabccz hclqeizl tgacem tuubn omwqr fpvolwyp gqtqlummx ytkvfc qsvklus xoyrhsvrx ybzxvu yjggom dedjzi xfmmezd mezyffk jnjdws wxmxuw iyhooej qozjrb rzvgceu ljiqtfhb iokrwlf bgksg sjbmc gknxqdui qhrvmrv">
+	                            <label class="form-label" for="Password10">Password<span class="required">*</span></label>
+	                            <input autocomplete="off" id="Password10" name="Password10" class="form-control fakepassword entry-disabled" required="" type="password">
+	                            <span class="position-absolute top-50 end-0 translate-middle-y p-0 mt-3">
+		                            <i class="fakepasswordicon fas fa-eye-slash cursor-pointer p-2" onclick="togglepwd();"></i>
+	                            </span>
+                                
+                            </div>                        <div class="mb-3 row">
+                            <div class="col-md-6 col-sm-12"><a href="/Global/account/ForgotUserId" class="float-left">Forgot User ID</a></div>
+                            <div class="col-md-6 col-sm-12"><a href="/Global/account/ForgotPassword" class="float-right">Forgot password?</a></div>
+                        </div>
+                        <!-- Button -->
+                        <div class="pt-3 pb-3 text-center">
+                            <button class="btn btn-primary-soft" id="btnVerify" type="button" onclick="VerifyRegister();">Verify</button>
+                            <button type="button" id="btnVerified" formnovalidate="formnovalidate" style="display:none;" class="btn btn-success text-center" disabled=""><i class="fa fa-badge-check pr-2"></i>Verified</button>
+                            <button class="btn btn-primary" style="display:none;" id="btnSubmit" type="submit">Login</button>
+                        </div>
+                        <p class="mb-0 pt-2 ustify-content-center align-items-center k-text-align-center">Not registered yet? <a href="/Global/account/RegisterUser"> Create an account</a></p>
+                        <input id="ReturnUrl" name="ReturnUrl" type="hidden" value="/Global/bls/VisaTypeVerification">
+                        <input id="CaptchaId" name="CaptchaId" type="hidden" value="30127743-dd57-432c-9a07-ec6b8ce1c316">
+                        <input id="CaptchaParam" name="CaptchaParam" type="hidden" value="">
+                        <input id="CaptchaData" name="CaptchaData" type="hidden" value="">
+                        <input id="ScriptData" name="ScriptData" type="hidden" value="H+WJuDDWXiQIqRKkcGrwsQtMxYJc0KG94b6Z4NNn3oxtUqlYndHDNnSMy0kc9q+mFlhwFpN4oYDurrigkWikBqK2LaEmhGqkTjzmWCzZTzxBiKqW/7vaXtqef7WoEmWhlSYma5fQJz10/D4/DONv/w==">
+                    <input name="__RequestVerificationToken" type="hidden" value="CfDJ8LYbiFPiSAFErivYdbxvaXGBMYOOsuaxOH2-YRLwdYFGJkNIECi8LOJAifWFroJgTYI_FbeV7HyLr0ASt79C0yj3AozRc-ueTiewXDgETX6rjF4dQUWD4fsy7VEfxyRipJaZnMNfpDp7uacqIJ1JROE"></form>
+                </div>
+            </div>
+
+CAPTCHA SELECTORS:
+<div class="k-widget k-window" tabindex="0" data-role="draggable" style="min-width: 90px; min-height: 50px; width: 400px; height: 600px; top: 168px; left: 340px; z-index: 10003;"><div class="k-window-titlebar"><span class="k-window-title" id="popup_1_wnd_title">Verify Registration</span><div class="k-window-actions"><a role="button" href="#" class="k-button k-flat k-button-icon k-window-action" aria-label="window-Maximize"><span class="k-icon k-i-window-maximize"></span></a><a role="button" href="#" class="k-button k-flat k-button-icon k-window-action" aria-label="Close"><span class="k-icon k-i-close"></span></a></div></div><div id="popup_1" data-role="window" class="k-window-content k-window-iframecontent" role="dialog" aria-labelledby="popup_1_wnd_title" style=""><iframe frameborder="0" title="Verify Registration" class="k-content-frame" src="/Global/CaptchaPublic/GenerateCaptcha?data=MTjTb%2fjTMm5GB69O%2fOsWl8NXx30vNMIm21GWUwHjC6Hwomn%2fbB5DcMnA7nqJu7MkWq%2faos6xiVK9ufhL%2fijxhTOxzlXFdApXJd48xs8OsFw%3d">This page requires frames in order to show content</iframe></div><div class="k-resize-handle k-resize-n"></div><div class="k-resize-handle k-resize-e"></div><div class="k-resize-handle k-resize-s"></div><div class="k-resize-handle k-resize-w"></div><div class="k-resize-handle k-resize-se"></div><div class="k-resize-handle k-resize-sw"></div><div class="k-resize-handle k-resize-ne"></div><div class="k-resize-handle k-resize-nw"></div></div>
