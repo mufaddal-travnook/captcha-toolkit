@@ -92,7 +92,7 @@ async function closeStrokes(binaryPng: Buffer): Promise<Buffer> {
   // glyphs without the risk of merging adjacent digits.
   return sharp(binaryPng)
     .blur(1.2)
-    .threshold(225) // keep near-white as white; anything the blur darkened -> black ink
+    .threshold(225) // reconnect thin/broken strokes; keep near-white as white
     .toBuffer();
 }
 
@@ -101,11 +101,13 @@ async function closeStrokes(binaryPng: Buffer): Promise<Buffer> {
  * underline the digit; that wide horizontal ink run in the lower part of the
  * cell merges with the glyphs and corrupts OCR (e.g. "855" -> "899"/"85").
  *
- * We scan the bottom 45% of rows for any row that is mostly ink across the
- * width (a bar, not a digit stroke) and paint from the first such row downward
- * white. Adapts to any underline thickness/position; leaves digits untouched.
+ * Bars appear at the BOTTOM (underline) and sometimes the TOP (a sliver of the
+ * clipped instruction line / tile edge caught in the top row). Both span most
+ * of the width, unlike a digit stroke. We scan the top and bottom bands and
+ * paint white from the cell edge up to / down to the bar — clearing the bar
+ * and anything beyond it, while leaving the central digits untouched.
  */
-async function removeUnderline(binaryPng: Buffer): Promise<Buffer> {
+async function removeHorizontalBars(binaryPng: Buffer): Promise<Buffer> {
   const { data, info } = await sharp(binaryPng)
     .grayscale()
     .raw()
@@ -122,31 +124,43 @@ async function removeUnderline(binaryPng: Buffer): Promise<Buffer> {
     rowInk[y] = ink / width;
   }
 
-  // A bar (solid OR dashed) spans most of the width. Solid rows read high ink;
-  // dashed rows read moderate ink but appear in the lower band where no digit
-  // body should be. Scan the bottom 45% for the first row that looks like a bar.
-  const scanStart = Math.floor(height * 0.55);
-  let barTop = -1;
-  for (let y = scanStart; y < height; y++) {
-    if (rowInk[y]! > 0.35) {
-      barTop = y;
+  // A bar (solid or dashed) covers >35% of a row's width; a digit stroke does not.
+  const BAR = 0.35;
+  const composites: sharp.OverlayOptions[] = [];
+
+  // BOTTOM band: clear from the first bar row down to the edge.
+  const bottomScan = Math.floor(height * 0.55);
+  for (let y = bottomScan; y < height; y++) {
+    if (rowInk[y]! > BAR) {
+      composites.push({
+        input: {
+          create: { width, height: height - y, channels: 3, background: { r: WHITE, g: WHITE, b: WHITE } },
+        },
+        top: y,
+        left: 0,
+      });
       break;
     }
   }
-  if (barTop < 0) return binaryPng;
 
-  const barH = height - barTop;
-  return sharp(binaryPng)
-    .composite([
-      {
-        input: {
-          create: { width, height: barH, channels: 3, background: { r: WHITE, g: WHITE, b: WHITE } },
-        },
-        top: barTop,
-        left: 0,
+  // TOP band: clear from the top edge down to the LAST bar row in the top 30%.
+  const topScan = Math.floor(height * 0.3);
+  let barBottom = -1;
+  for (let y = 0; y < topScan; y++) {
+    if (rowInk[y]! > BAR) barBottom = y;
+  }
+  if (barBottom >= 0) {
+    composites.push({
+      input: {
+        create: { width, height: barBottom + 1, channels: 3, background: { r: WHITE, g: WHITE, b: WHITE } },
       },
-    ])
-    .toBuffer();
+      top: 0,
+      left: 0,
+    });
+  }
+
+  if (composites.length === 0) return binaryPng;
+  return sharp(binaryPng).composite(composites).toBuffer();
 }
 
 /**
@@ -190,7 +204,7 @@ export async function preprocessCell(image: Buffer, box: CellBox): Promise<Buffe
 
   // Repair broken strokes, then strip leftover speckles.
   const repaired = await closeStrokes(binaryPng);
-  const cleaned = await removeUnderline(await sharp(repaired).median(5).toBuffer());
+  const cleaned = await removeHorizontalBars(await sharp(repaired).median(5).toBuffer());
 
   // Trim to the digit, pad generously, set DPI so Tesseract scales correctly.
   const pad = { top: 40, bottom: 40, left: 40, right: 40, background: { r: WHITE, g: WHITE, b: WHITE } };
