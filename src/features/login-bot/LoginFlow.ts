@@ -9,6 +9,7 @@ import { humanType, safeClick } from './safeClick.js';
 import { solveCaptcha, reloadCaptcha } from './CaptchaBridge.js';
 import { FatalError, RetryableError, withRetry } from './errors.js';
 import { createLogger, maskEmail, maskSecret, type Logger } from './logger.js';
+import { humanPause } from './human.js';
 
 export interface Credentials {
   email: string;
@@ -44,10 +45,12 @@ export async function runLoginFlow(
   const passwordField = await firstVisible(page, sel.passwordCandidates, 'password');
   await humanType(emailField, creds.email);
   log.info(`Email entered: ${maskEmail(creds.email)}`);
+  await humanPause(500, 1300); // pause between fields, as a person would
   await humanType(passwordField, creds.password);
   log.info(`Password entered: ${maskSecret(creds.password)}`);
 
   // Trigger the captcha modal.
+  await humanPause(600, 1500); // glance at the form before clicking
   log.step('Clicking Verify to open the captcha…');
   await safeClick(page, page.locator(sel.verifyButton));
 
@@ -76,6 +79,7 @@ export async function runLoginFlow(
   );
 
   // After verification the Login button is revealed; submit.
+  await humanPause(700, 1600); // brief pause after the captcha resolves
   log.step('Submitting login…');
   await safeClick(page, page.locator(sel.submitButton));
 

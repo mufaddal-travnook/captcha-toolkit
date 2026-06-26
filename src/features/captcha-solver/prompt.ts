@@ -23,10 +23,13 @@ export function buildSolvePrompt({ grid, targetNumber }: BuildPromptArgs): strin
     : 'Read the target number from the prompt text shown in the image (e.g. "select all boxes with number NNN").';
 
   return [
-    `You are reading a ${grid.rows}x${grid.cols} grid captcha.`,
+    `You are reading a ${grid.rows}x${grid.cols} grid captcha image.`,
     targetHint,
-    'Read the number printed in each cell, scanning left-to-right, top-to-bottom.',
-    'Ignore styling, color, rotation, and background noise — only the digits matter.',
+    `The grid has ${total} cells. Index them 0-based in READING ORDER:`,
+    `left-to-right within each row, then top-to-bottom (cell 0 = top-left,`,
+    `cell ${grid.cols - 1} = top-right, cell ${total - 1} = bottom-right).`,
+    'Read the number printed in each cell. Ignore styling, color, rotation, and',
+    'background noise — only the digits matter.',
     'Return ONLY a JSON object of this exact shape (no markdown, no commentary):',
     `{"targetNumber":"<digits>","values":["<cell0>","<cell1>", ...exactly ${total} entries]}`,
     'Each value must contain digits only. If a cell is unreadable, use an empty string "".',

@@ -20,7 +20,7 @@ export async function acquireLock(lockPath: string): Promise<Lock> {
   await writeFile(lockPath, '', { flag: 'a' });
 
   try {
-    const release = await lockfile.lock(lockPath, { stale: 5 * 60_000, retries: 0 });
+    const release = await lockfile.lock(lockPath, { stale: 90_000, retries: 0 });
     return { release };
   } catch {
     throw new Error(

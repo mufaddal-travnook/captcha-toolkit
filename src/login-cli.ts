@@ -5,6 +5,7 @@
  *   npm run login
  *   npm run login -- --solver ocr        # use native OCR instead of OpenAI
  *   npm run login -- --headless          # run without a visible window
+ *   npm run login -- --keep-open         # leave the browser open after login
  */
 import { runLogin, FatalError } from './features/login-bot/index.js';
 import type { SolverName } from './core/types.js';
@@ -18,9 +19,10 @@ async function main(): Promise<void> {
   const argv = process.argv.slice(2);
   const solver = (get(argv, '--solver') ?? 'openai') as SolverName;
   const headed = !argv.includes('--headless');
+  const keepOpen = argv.includes('--keep-open');
 
   const result = await runLogin({
-    config: { solver, headed },
+    config: { solver, headed, keepOpen },
     credentials: {
       email: process.env.BLS_EMAIL ?? '',
       password: process.env.BLS_PASSWORD ?? '',
@@ -28,6 +30,7 @@ async function main(): Promise<void> {
   });
 
   console.log(result.message);
+  // With --keep-open, runLogin resolves only after the user closes the window.
   process.exit(result.success ? 0 : 2);
 }
 

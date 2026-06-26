@@ -40,12 +40,32 @@ export async function runLogin(opts: RunLoginOptions): Promise<LoginResult> {
   });
 
   try {
-    return await runLoginFlow(page, config, opts.credentials, log);
+    const result = await runLoginFlow(page, config, opts.credentials, log);
+    if (config.keepOpen) {
+      // Surface the result now, then leave the browser open. Release the lock
+      // (the run is done) but keep the process alive so the window persists.
+      log.info(result.message);
+      await lock.release().catch(() => {});
+      log.info('Leaving browser open (keepOpen). Close the window or press Ctrl+C to exit.');
+      await waitForBrowserClose(page);
+    }
+    return result;
   } finally {
-    log.info('Closing browser and releasing lock.');
-    await close();
-    await lock.release().catch(() => {});
+    if (!config.keepOpen) {
+      log.info('Closing browser and releasing lock.');
+      await close();
+      await lock.release().catch(() => {});
+    }
   }
+}
+
+/** Resolve only when the browser/page is closed (by the user). */
+function waitForBrowserClose(page: import('playwright').Page): Promise<void> {
+  return new Promise<void>((resolve) => {
+    page.on('close', () => resolve());
+    page.context().on('close', () => resolve());
+    page.context().browser()?.on('disconnected', () => resolve());
+  });
 }
 
 export { DEFAULT_CONFIG } from './config.js';

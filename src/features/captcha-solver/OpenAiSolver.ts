@@ -16,6 +16,8 @@ export interface OpenAiSolverOptions {
   apiKey?: string;
   model?: string;
   client?: OpenAI;
+  /** Called with the model's raw response text (before parsing) — for logging. */
+  onRawResponse?: (raw: string) => void;
 }
 
 /** Shape we ask the model to return. */
@@ -29,11 +31,13 @@ export class OpenAiSolver implements Solver {
   readonly name = 'openai' as const;
   private readonly client: OpenAI;
   private readonly model: string;
+  private readonly onRawResponse?: (raw: string) => void;
 
   constructor(opts: OpenAiSolverOptions = {}) {
     const apiKey = opts.apiKey ?? process.env.OPENAI_API_KEY;
     this.client = opts.client ?? new OpenAI({ apiKey });
     this.model = opts.model ?? 'gpt-4o';
+    this.onRawResponse = opts.onRawResponse;
   }
 
   async solve(input: SolveInput): Promise<CaptchaSolution> {
@@ -99,6 +103,7 @@ export class OpenAiSolver implements Solver {
     });
 
     const raw = completion.choices[0]?.message?.content ?? '{}';
+    this.onRawResponse?.(raw);
     const parsed = JSON.parse(raw) as Partial<VisionResult>;
     return {
       targetNumber: digitsOnly(parsed.targetNumber ?? ''),

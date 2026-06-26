@@ -9,6 +9,8 @@ export interface LoginBotConfig {
   url: string;
   /** Run with a visible browser window. */
   headed: boolean;
+  /** Keep the browser open after the run instead of closing it. */
+  keepOpen: boolean;
   /** Which captcha solver to use. */
   solver: SolverName;
   /** Retry/backoff for transient failures and captcha misses. */
@@ -29,8 +31,7 @@ export interface Selectors {
   submitButton: string;
   /** Captcha iframe and its inner elements. */
   captchaFrame: string;
-  promptLabel: string; // many decoys; we pick the VISIBLE one
-  gridContainer: string; // screenshot target
+  captchaMainDiv: string; // container with prompt + grid (screenshot target)
   tileImage: string; // discrete tiles, clicked by index
   verifiedMessage: string; // success signal inside the frame
   reloadButton: string; // by visible text fallback handled in code
@@ -45,6 +46,7 @@ function idRange(prefix: string, n: number): string[] {
 export const DEFAULT_CONFIG: LoginBotConfig = {
   url: 'https://uae.blsspainglobal.com/Global/Account/LogIn?ReturnUrl=%2FGlobal%2Fbls%2FVisaTypeVerification',
   headed: true,
+  keepOpen: false,
   solver: 'openai',
   retries: 3,
   backoffMs: 1500,
@@ -56,11 +58,11 @@ export const DEFAULT_CONFIG: LoginBotConfig = {
     verifiedIndicator: '#btnVerified',
     submitButton: '#btnSubmit',
     captchaFrame: 'iframe.k-content-frame',
-    promptLabel: '.box-label',
-    gridContainer: '.row.no-gutters',
+    captchaMainDiv: '#captcha-main-div',
     tileImage: 'img.captcha-img',
     verifiedMessage: '#captcha-message-div',
-    reloadButton: 'text=/reload/i',
-    submitSelection: 'text=/submit/i',
+    // Action controls are <div class="img-action-div" onclick="onReload()/onSubmit()">.
+    reloadButton: '.img-action-div:has-text("Reload")',
+    submitSelection: '.img-action-div:has-text("Submit")',
   },
 };

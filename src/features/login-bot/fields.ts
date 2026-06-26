@@ -24,20 +24,3 @@ export async function firstVisible(
   }
   throw new Error(`No visible ${label} field found among: ${selectors.join(', ')}`);
 }
-
-/**
- * Among many `.box-label` prompts, find the visible one and extract its target
- * number (e.g. "Please select all boxes with number 797" -> "797").
- */
-export async function readVisibleTarget(scope: Page | Frame, promptSelector: string): Promise<string> {
-  const labels = scope.locator(promptSelector);
-  const count = await labels.count();
-  for (let i = 0; i < count; i++) {
-    const label = labels.nth(i);
-    if (!(await label.isVisible().catch(() => false))) continue;
-    const text = (await label.textContent()) ?? '';
-    const match = text.match(/\d{3,}/);
-    if (match) return match[0];
-  }
-  throw new Error('Could not read the visible captcha target number.');
-}
