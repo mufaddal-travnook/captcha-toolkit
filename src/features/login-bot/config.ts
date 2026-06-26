@@ -19,6 +19,32 @@ export interface LoginBotConfig {
   /** Per-action timeout (ms). */
   timeoutMs: number;
   selectors: Selectors;
+  /** Post-login dashboard step (second captcha). */
+  dashboard: DashboardConfig;
+  /** Visa-type form filled after the dashboard step. */
+  visaForm: VisaFormConfig;
+}
+
+export interface VisaFormConfig {
+  /** Fill the visa form after the dashboard step. */
+  enabled: boolean;
+  /** Submit the form after filling it. */
+  submit: boolean;
+  /** Dropdown values (matched case-insensitively, "contains"). */
+  location: string; // e.g. "Dubai" | "Abu Dhabi"
+  visaType: string; // e.g. "Schengen Visa/ Short Term Visa"
+  visaSubType: string; // e.g. "Tourist Visa" | "Business Visa"
+  appointmentCategory: string; // e.g. "Normal" | "Prime Time"
+  appointmentFor: 'Individual' | 'Family';
+}
+
+export interface DashboardConfig {
+  /** Run the dashboard step after login. */
+  enabled: boolean;
+  /** "Verify Selection" button that opens the dashboard captcha. */
+  verifyButton: string;
+  /** "Submit" button revealed after the captcha verifies. */
+  submitButton: string;
 }
 
 export interface Selectors {
@@ -64,5 +90,21 @@ export const DEFAULT_CONFIG: LoginBotConfig = {
     // Action controls are <div class="img-action-div" onclick="onReload()/onSubmit()">.
     reloadButton: '.img-action-div:has-text("Reload")',
     submitSelection: '.img-action-div:has-text("Submit")',
+  },
+  dashboard: {
+    enabled: true,
+    // Dashboard reuses the same ids as login: #btnVerify ("Verify Selection")
+    // opens the captcha; #btnSubmit ("Submit") is revealed after it verifies.
+    verifyButton: '#btnVerify',
+    submitButton: '#btnSubmit',
+  },
+  visaForm: {
+    enabled: true,
+    submit: true,
+    location: 'Dubai', // change to 'Abu Dhabi' as needed
+    visaType: 'Schengen',
+    visaSubType: 'Tourist',
+    appointmentCategory: 'Normal',
+    appointmentFor: 'Individual',
   },
 };

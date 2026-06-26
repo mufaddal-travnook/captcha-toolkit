@@ -17,7 +17,7 @@ import type { Frame, Page } from 'playwright';
 import { createSolver } from '../captcha-solver/index.js';
 import type { SolverName } from '../../core/types.js';
 import type { Selectors } from './config.js';
-import { RetryableError } from './errors.js';
+import { RetryableError, withRetry } from './errors.js';
 import { createLogger, type Logger } from './logger.js';
 import { humanPause } from './human.js';
 
@@ -180,4 +180,40 @@ export async function solveCaptcha(
 export async function reloadCaptcha(page: Page, selectors: Selectors): Promise<void> {
   const frame = await getCaptchaFrame(page, selectors.captchaFrame);
   await frame.locator(selectors.reloadButton).last().click({ force: true }).catch(() => {});
+}
+
+/**
+ * Solve the captcha with retry + reload. Shared by BOTH the login captcha and
+ * the dashboard captcha (identical DOM). `label` just tags the log lines.
+ */
+export async function solveCaptchaWithRetry(
+  page: Page,
+  selectors: Selectors,
+  solverName: SolverName,
+  opts: { retries: number; backoffMs: number; label?: string },
+  log: Logger = createLogger(),
+): Promise<CaptchaResult> {
+  const tag = opts.label ? `${opts.label} ` : '';
+  let attempt = 0;
+  return withRetry(
+    async () => {
+      attempt++;
+      log.step(`Solving ${tag}captcha (attempt ${attempt}) via '${solverName}' solver…`);
+      const result = await solveCaptcha(page, selectors, solverName, log);
+      if (!result.verified) {
+        throw new RetryableError(`Captcha not verified (target ${result.target}).`);
+      }
+      log.info(`${tag}captcha verified ✓ (target ${result.target}).`);
+      return result;
+    },
+    {
+      retries: opts.retries,
+      backoffMs: opts.backoffMs,
+      onRetry: async (n, err) => {
+        log.warn(`Captcha attempt failed: ${err instanceof Error ? err.message : err}`);
+        log.step(`Reloading images before retry ${n}…`);
+        await reloadCaptcha(page, selectors).catch(() => {});
+      },
+    },
+  );
 }

@@ -115,7 +115,7 @@
                             <button class="btn btn-primary-soft" id="btnVerify" type="button" onclick="VerifyRegister();">Verify</button>
                             <button type="button" id="btnVerified" formnovalidate="formnovalidate" style="display:none;" class="btn btn-success text-center" disabled=""><i class="fa fa-badge-check pr-2"></i>Verified</button>
                             <button class="btn btn-primary" style="display:none;" id="btnSubmit" type="submit">Login</button>
-                        </div>
+                        </div> 
                         <p class="mb-0 pt-2 ustify-content-center align-items-center k-text-align-center">Not registered yet? <a href="/Global/account/RegisterUser"> Create an account</a></p>
                         <input id="ReturnUrl" name="ReturnUrl" type="hidden" value="/Global/bls/VisaTypeVerification">
                         <input id="CaptchaId" name="CaptchaId" type="hidden" value="30127743-dd57-432c-9a07-ec6b8ce1c316">
@@ -128,3 +128,39 @@
 
 CAPTCHA SELECTORS:
 <div class="k-widget k-window" tabindex="0" data-role="draggable" style="min-width: 90px; min-height: 50px; width: 400px; height: 600px; top: 168px; left: 340px; z-index: 10003;"><div class="k-window-titlebar"><span class="k-window-title" id="popup_1_wnd_title">Verify Registration</span><div class="k-window-actions"><a role="button" href="#" class="k-button k-flat k-button-icon k-window-action" aria-label="window-Maximize"><span class="k-icon k-i-window-maximize"></span></a><a role="button" href="#" class="k-button k-flat k-button-icon k-window-action" aria-label="Close"><span class="k-icon k-i-close"></span></a></div></div><div id="popup_1" data-role="window" class="k-window-content k-window-iframecontent" role="dialog" aria-labelledby="popup_1_wnd_title" style=""><iframe frameborder="0" title="Verify Registration" class="k-content-frame" src="/Global/CaptchaPublic/GenerateCaptcha?data=MTjTb%2fjTMm5GB69O%2fOsWl8NXx30vNMIm21GWUwHjC6Hwomn%2fbB5DcMnA7nqJu7MkWq%2faos6xiVK9ufhL%2fijxhTOxzlXFdApXJd48xs8OsFw%3d">This page requires frames in order to show content</iframe></div><div class="k-resize-handle k-resize-n"></div><div class="k-resize-handle k-resize-e"></div><div class="k-resize-handle k-resize-s"></div><div class="k-resize-handle k-resize-w"></div><div class="k-resize-handle k-resize-se"></div><div class="k-resize-handle k-resize-sw"></div><div class="k-resize-handle k-resize-ne"></div><div class="k-resize-handle k-resize-nw"></div></div>
+
+
+
+
+SLOT INFORMATION SELECTOR=>
+<div class="modal-body scam-body" style="color:black;font-size:medium">
+                <span id="commonModalBody">Currently, no slots are available for the selected category. Slots are released basis instructions from Client Government. Kindly try again after few days. Thank you for your patience</span>
+            </div>
+
+
+lOCATION WILL HAVE:
+DUBAI 
+ABU DHABI
+
+VISA TYPE
+Schengen Visa/ Short Term Visa
+
+Visa Sub Type
+Tourist Visa
+Business Visa
+
+
+Appointment Category
+Prime Time
+Normal
+
+
+
+<input id="CaptchaData" name="CaptchaData" type="hidden" value="+wrAniPzozkSC5k3FCWtLrIMD9pwV0ZyU/31G4khY5EPI88jz9HXALF6daxAuWiqBot5+sbdWMaKaJs+eewVb6+v/Kpb6qiyJ3DJTbYDxt20ivTUPVzD/9w3oQ9q+b0RfZ+KcFGYAhXQSmKglZyRwXQ00od8/GfmqpQzFVhvvFM=">
+
+<input id="ScriptData" name="ScriptData" type="hidden" value="jo+WrPiNo78ZDGuNpLOXpEo5tcRburItrGNsaJgbsr2egGOWEvOhGb42RWKjpqnuYiDlM8j+EcDFQAvf+zFLdPT0dRTk4Q5s437BG1TxuTbh7OPP0bwE45q4+OCC0DyLYEw+8ReiDL8S9N/hG7Z9DxgyhV66fCvcKcyT1yEdWfr+n/Ea7LCE4LNfZvWR+ptJwe40NnNq6XOmawovzxjS5CaRjmSAeFmRkxXdIYXd+8WGQQRWUZvmTf81l18whnogUO+EESA9izcUrkMQqn2qbbRnyYle4wWmW68P5GIIgZ/HCfHIvcQtRgdHcT7CGrkM/NFI2bR2XqP47hVvFwS4t/TGuOfnleCxkKF7pkBlAhM=">
+
+
+<input id="ResponseData" name="ResponseData" type="hidden" value="">
+
+<input name="__RequestVerificationToken" type="hidden" value="CfDJ8LYbiFPiSAFErivYdbxvaXGnoeXhaV8XYXJp7-5NlZr56btcjoKzZ1-JeC5RXiHbepOj84TwwZJOGIH5RKtG54o7cPIQQNaQxFqgpoq_MaGOVQFj0pxjFNyTcfy7eVewz4ExsnnTPI5fOQKUgDXh9H_RkTJir3gO-oWoyc8Yc_GRjlWmIszkA0Z-hyKpONyfbQ">

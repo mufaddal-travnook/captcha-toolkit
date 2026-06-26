@@ -6,8 +6,9 @@ import type { Page } from 'playwright';
 import type { LoginBotConfig } from './config.js';
 import { firstVisible } from './fields.js';
 import { humanType, safeClick } from './safeClick.js';
-import { solveCaptcha, reloadCaptcha } from './CaptchaBridge.js';
-import { FatalError, RetryableError, withRetry } from './errors.js';
+import { solveCaptchaWithRetry } from './CaptchaBridge.js';
+import { runDashboardStep } from './DashboardFlow.js';
+import { FatalError } from './errors.js';
 import { createLogger, maskEmail, maskSecret, type Logger } from './logger.js';
 import { humanPause } from './human.js';
 
@@ -54,28 +55,13 @@ export async function runLoginFlow(
   log.step('Clicking Verify to open the captcha…');
   await safeClick(page, page.locator(sel.verifyButton));
 
-  // Solve the captcha, retrying transient failures / wrong solves.
-  let attempt = 0;
-  const captcha = await withRetry(
-    async () => {
-      attempt++;
-      log.step(`Solving captcha (attempt ${attempt}) via '${config.solver}' solver…`);
-      const result = await solveCaptcha(page, sel, config.solver, log);
-      if (!result.verified) {
-        throw new RetryableError(`Captcha not verified (target ${result.target}).`);
-      }
-      log.info(`Captcha verified ✓ (target ${result.target}).`);
-      return result;
-    },
-    {
-      retries: config.retries,
-      backoffMs: config.backoffMs,
-      onRetry: async (n, err) => {
-        log.warn(`Captcha attempt failed: ${err instanceof Error ? err.message : err}`);
-        log.step(`Reloading images before retry ${n}…`);
-        await reloadCaptcha(page, sel).catch(() => {});
-      },
-    },
+  // Solve the login captcha, retrying transient failures / wrong solves.
+  const captcha = await solveCaptchaWithRetry(
+    page,
+    sel,
+    config.solver,
+    { retries: config.retries, backoffMs: config.backoffMs, label: 'login' },
+    log,
   );
 
   // After verification the Login button is revealed; submit.
@@ -88,11 +74,26 @@ export async function runLoginFlow(
   const success = !/Account\/LogIn/i.test(page.url());
   log.info(`Post-login URL: ${page.url()}`);
 
-  const message = success
-    ? `Logged in (captcha ${captcha.target}, tiles [${captcha.matches.join(', ')}]).`
-    : 'Captcha verified but login did not redirect — check credentials or post-login step.';
-  if (success) log.step(message);
-  else log.warn(message);
+  if (!success) {
+    const message =
+      'Captcha verified but login did not redirect — check credentials or post-login step.';
+    log.warn(message);
+    return { success: false, target: captcha.target, matches: captcha.matches, message };
+  }
 
-  return { success, target: captcha.target, matches: captcha.matches, message };
+  log.step(`Logged in (login captcha ${captcha.target}, tiles [${captcha.matches.join(', ')}]).`);
+
+  // Dashboard step: click "Verify Selection", solve the second captcha, then
+  // fill + submit the visa form.
+  if (config.dashboard.enabled) {
+    await runDashboardStep(page, config, log);
+  }
+
+  log.step(`Automation complete. Final page: ${page.url()}`);
+  return {
+    success: true,
+    target: captcha.target,
+    matches: captcha.matches,
+    message: `Completed full flow (login captcha ${captcha.target}). Final page: ${page.url()}`,
+  };
 }
