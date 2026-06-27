@@ -13,7 +13,13 @@ import { safeClick } from './safeClick.js';
 import { createLogger, type Logger } from './logger.js';
 import { humanPause } from './human.js';
 
-export async function runDashboardStep(
+/**
+ * The captcha part of the dashboard: click "Verify Selection", solve the
+ * captcha, click "Submit", and wait for the next page (the visa form) to load.
+ * Reused by the initial flow AND by the bot-page recovery (going back from
+ * /account/bot lands here, on the Verify Selection page, again).
+ */
+export async function runDashboardCaptcha(
   page: Page,
   config: LoginBotConfig,
   log: Logger = createLogger(),
@@ -21,7 +27,6 @@ export async function runDashboardStep(
   const dash = config.dashboard;
   const sel = config.selectors;
 
-  // Make sure the dashboard has settled after the post-login redirect.
   await page.waitForLoadState('networkidle').catch(() => {});
   await humanPause(800, 1800);
 
@@ -55,10 +60,16 @@ export async function runDashboardStep(
     // @ts-expect-error browser global available at runtime inside waitForFunction
     location.href !== prev;
   await page.waitForFunction(navAway, urlBefore, { timeout: 15_000 }).catch(() => {});
-  log.info(
-    `Dashboard step complete (captcha ${captcha.target}). New page: ${page.url()}`,
-  );
+  log.info(`Dashboard captcha complete (target ${captcha.target}). New page: ${page.url()}`);
+}
 
+export async function runDashboardStep(
+  page: Page,
+  config: LoginBotConfig,
+  log: Logger = createLogger(),
+): Promise<void> {
+  // Verify Selection → captcha → Submit → visa form opens.
+  await runDashboardCaptcha(page, config, log);
   // The new page is the visa-type form — fill it.
   await runVisaFormFlow(page, config, log);
 }

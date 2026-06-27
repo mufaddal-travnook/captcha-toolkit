@@ -15,10 +15,22 @@ import { visibleKendoField, selectKendoOption, kendoSelectedText } from './kendo
 import { humanClick } from './safeClick.js';
 import { createLogger, type Logger } from './logger.js';
 import { humanPause } from './human.js';
+import { ALL_COMBOS, SINGLE_COMBO, comboLabel, type VisaCombo } from './visaCombos.js';
+import { runDashboardCaptcha } from './DashboardFlow.js';
 
 /** Field id suffixes to probe when finding the visible decoy set. */
 const SUFFIXES = ['1', '2', '3', '4', '5', '6'];
 
+/** True if the current page is the anti-bot landing page. */
+function isBotPage(page: Page): boolean {
+  return /account\/bot/i.test(page.url());
+}
+
+/**
+ * Orchestrator. Decides which combos to run (all 8 vs the single combo), then
+ * fills + submits each. On landing at /account/bot, optionally goes back a page
+ * and retries the same combo.
+ */
 export async function runVisaFormFlow(
   page: Page,
   config: LoginBotConfig,
@@ -27,39 +39,128 @@ export async function runVisaFormFlow(
   const form = config.visaForm;
   if (!form.enabled) return;
 
+  const combos = form.runAll ? ALL_COMBOS : [SINGLE_COMBO];
+  log.step(
+    `Visa form: ${form.runAll ? `running ALL ${combos.length} combinations` : 'running single combo'}.`,
+  );
+
+  for (let i = 0; i < combos.length; i++) {
+    const combo = combos[i]!;
+    log.step(`=== Combo ${i + 1}/${combos.length}: ${comboLabel(combo)} ===`);
+
+    // Make sure we're actually ON the visa form before filling. After the first
+    // combo's submit (or a bot-page recovery), we won't be — re-open it.
+    if (!(await isVisaFormPage(page))) {
+      const opened = await reopenVisaForm(page, config, log);
+      if (!opened) {
+        log.warn('Could not reach the visa form; skipping remaining combos.');
+        break;
+      }
+    }
+
+    await fillAndSubmitCombo(page, config, combo, log);
+
+    // If this combo landed us on the bot page, try recovery: go back (lands on
+    // the Verify Selection page), re-solve the captcha to re-open the form, then
+    // re-fill + re-submit the SAME combo.
+    let recov = 0;
+    while (isBotPage(page) && recov < form.botRecoveryAttempts) {
+      recov++;
+      log.warn(`Landed on /account/bot. Recovery ${recov}/${form.botRecoveryAttempts}: going back…`);
+      const opened = await reopenVisaForm(page, config, log);
+      if (!opened) {
+        log.warn('Recovery failed: could not re-open the visa form. Stopping recovery.');
+        break;
+      }
+      await fillAndSubmitCombo(page, config, combo, log);
+    }
+  }
+
+  log.step('Visa form: all requested combinations processed.');
+}
+
+/**
+ * Get back to the visa form from wherever we are:
+ *  - already on the form → done
+ *  - on /account/bot or a post-submit page → go back; if that lands on the
+ *    Verify Selection page, solve its captcha + submit to re-open the form.
+ * Returns true if the visa form is showing afterwards.
+ */
+async function reopenVisaForm(page: Page, config: LoginBotConfig, log: Logger): Promise<boolean> {
+  if (await isVisaFormPage(page)) return true;
+
+  await page.goBack({ waitUntil: 'domcontentloaded' }).catch(() => {});
   await page.waitForLoadState('networkidle').catch(() => {});
   await humanPause(900, 1800);
-  log.step('Visa form: starting. Filling cascading dropdowns in order…');
+
+  if (await isVisaFormPage(page)) return true;
+
+  // Likely on the Verify Selection (dashboard captcha) page now.
+  if (await isVerifyPage(page)) {
+    log.step('Back on the Verify Selection page — re-solving captcha to re-open the form…');
+    await runDashboardCaptcha(page, config, log);
+    return isVisaFormPage(page);
+  }
+
+  log.warn(`After going back, unexpected page: ${page.url()}`);
+  return isVisaFormPage(page);
+}
+
+/** True if the current page is the dashboard "Verify Selection" captcha page. */
+async function isVerifyPage(page: Page): Promise<boolean> {
+  const btn = page.locator('#btnVerify');
+  return (await btn.count()) > 0 && (await btn.first().isVisible().catch(() => false));
+}
+
+/** Fill all dropdowns/radio for one combo, then (optionally) submit. */
+async function fillAndSubmitCombo(
+  page: Page,
+  config: LoginBotConfig,
+  combo: VisaCombo,
+  log: Logger,
+): Promise<void> {
+  const form = config.visaForm;
+
+  await page.waitForLoadState('networkidle').catch(() => {});
+  // A person lands on the form and takes a moment to read it before touching
+  // anything — a longer, more variable initial pause than between fields.
+  await humanPause(1400, 3200);
   log.info(
-    `Target values → Location: "${form.location}", Visa Type: "${form.visaType}", ` +
-      `Sub Type: "${form.visaSubType}", Category: "${form.appointmentCategory}", ` +
-      `For: "${form.appointmentFor}".`,
+    `Filling → Location: "${combo.location}", Visa Type: "${combo.visaType}", ` +
+      `Sub Type: "${combo.visaSubType}", Category: "${combo.appointmentCategory}", ` +
+      `For: "${combo.appointmentFor}".`,
   );
 
   // 1. Location (drives Visa Type + Appointment Category).
   log.step('Visa form [1/5]: Location…');
-  await pickDropdown(page, 'Location', form.location, log);
+  await pickDropdown(page, 'Location', combo.location, log);
+
+  // Cascading dropdowns repopulate after each pick — wait for the network to
+  // settle AND add a human "wait for the next field to appear" beat.
+  await interFieldPause(page);
 
   // 2. Visa Type (drives Visa Sub Type).
   log.step('Visa form [2/5]: Visa Type…');
-  await pickDropdown(page, 'VisaType', form.visaType, log);
+  await pickDropdown(page, 'VisaType', combo.visaType, log);
+
+  await interFieldPause(page);
 
   // 3. Visa Sub Type.
   log.step('Visa form [3/5]: Visa Sub Type…');
-  await pickDropdown(page, 'VisaSubType', form.visaSubType, log);
+  await pickDropdown(page, 'VisaSubType', combo.visaSubType, log);
 
-  // 4. Appointment Category (its container is shown after Location is chosen).
-  //    Non-fatal: some flows don't require it.
+  await interFieldPause(page);
+
+  // 4. Appointment Category (container shown after Location is chosen). Non-fatal.
   log.step('Visa form [4/5]: Appointment Category…');
-  await pickDropdown(page, 'AppointmentCategoryId', form.appointmentCategory, log, true);
+  await pickDropdown(page, 'AppointmentCategoryId', combo.appointmentCategory, log, true);
 
-  // Picking a "Premium" category opens a confirmation modal — log its message,
-  // then reject it to keep the normal flow.
+  // Picking "Prime Time"/premium may open a confirmation modal — log + reject.
   await handlePremiumModal(page, log);
 
   // 5. Appointment For (radio: Individual / Family).
   log.step('Visa form [5/5]: Appointment For…');
-  await pickAppointmentFor(page, form.appointmentFor, log);
+  await pickAppointmentFor(page, combo.appointmentFor, log);
 
   // 6. Submit.
   if (form.submit) {
@@ -81,6 +182,25 @@ export async function runVisaFormFlow(
   } else {
     log.info('Visa form filled (submit disabled).');
   }
+}
+
+/**
+ * Pause between cascading dropdowns: wait for the network to settle (the next
+ * dependent field is being populated server-side) plus a short, variable human
+ * beat — the moment a person spends moving their eyes to the next field.
+ */
+async function interFieldPause(page: Page): Promise<void> {
+  await page.waitForLoadState('networkidle').catch(() => {});
+  await humanPause(500, 1300);
+}
+
+/** True if the current page shows the visa form (a Location dropdown exists). */
+async function isVisaFormPage(page: Page): Promise<boolean> {
+  for (const s of SUFFIXES) {
+    const w = page.locator(`span.k-dropdown[aria-labelledby="Location${s}_label"]`);
+    if ((await w.count()) > 0 && (await w.first().isVisible().catch(() => false))) return true;
+  }
+  return false;
 }
 
 /** Log the result page's heading/alert so the final state is visible in logs. */
@@ -129,9 +249,20 @@ async function pickAppointmentFor(page: Page, value: string, log: Logger): Promi
     log.warn(`Appointment For "${value}" radio not found; leaving default.`);
     return;
   }
-  await radio.check({ force: true }).catch(async () => {
-    await radio.click({ force: true });
-  });
+  // Click the radio the human way (cursor moves to it) rather than a forced
+  // programmatic check. Kendo styled radios are often tiny, so fall back to the
+  // associated label, then to a forced check only as a last resort.
+  await humanPause(200, 500);
+  try {
+    await humanClick(page, radio);
+  } catch {
+    const label = page.locator(`label[for="${await radio.getAttribute('id')}"]:visible`).first();
+    if ((await label.count()) > 0) {
+      await humanClick(page, label).catch(async () => radio.check({ force: true }));
+    } else {
+      await radio.check({ force: true }).catch(async () => radio.click({ force: true }));
+    }
+  }
   log.info(`Appointment For: ${value}.`);
 }
 
@@ -145,12 +276,18 @@ async function handlePremiumModal(page: Page, log: Logger): Promise<void> {
 
   const title = (await modal.locator('.modal-title').first().textContent().catch(() => '')) ?? '';
   const body = (await modal.locator('.modal-body').first().textContent().catch(() => '')) ?? '';
+  // Capture the modal's full visible text too — the title/body selectors can
+  // miss content rendered outside .modal-body (footer notes, button labels).
+  const full = (await modal.innerText().catch(() => '')) ?? '';
   log.warn(`Premium modal appeared — title: "${title.trim()}".`);
   log.warn(`Premium modal message: "${body.replace(/\s+/g, ' ').trim()}".`);
+  log.warn(`Premium modal full text: "${full.replace(/\s+/g, ' ').trim()}".`);
 
   const reject = modal.locator('.btn-danger', { hasText: /reject/i }).first();
   if (await reject.isVisible().catch(() => false)) {
-    await reject.click({ force: true });
+    // A person reads the modal before reacting, then moves to the button.
+    await humanPause(700, 1500);
+    await humanClick(page, reject).catch(async () => reject.click({ force: true }));
     log.info('Dismissed Premium modal (clicked Reject).');
     await humanPause(300, 700);
   }

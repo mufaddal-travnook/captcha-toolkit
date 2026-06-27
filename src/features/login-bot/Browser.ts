@@ -4,16 +4,21 @@
  *
  * Uses playwright-extra + puppeteer-extra-plugin-stealth to hide automation
  * signals (navigator.webdriver, headless markers, etc.) for a legitimate login.
+ *
+ * Launches a PERSISTENT context (a real on-disk user-data-dir), so cookies,
+ * localStorage and session state survive across runs — like a normal browser
+ * profile. This avoids re-logging-in every run.
  */
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { chromium } from 'playwright-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
-import type { Browser as PWBrowser, BrowserContext, Page } from 'playwright';
+import type { BrowserContext, Page } from 'playwright';
 
 // Apply stealth evasions once.
 chromium.use(StealthPlugin());
 
 export interface LaunchedBrowser {
-  browser: PWBrowser;
   context: BrowserContext;
   page: Page;
   close: () => Promise<void>;
@@ -22,27 +27,31 @@ export interface LaunchedBrowser {
 export interface LaunchOptions {
   headed: boolean;
   timeoutMs: number;
+  /** Profile directory for the persistent context. Defaults to a temp profile. */
+  userDataDir?: string;
 }
 
 export async function launchBrowser(opts: LaunchOptions): Promise<LaunchedBrowser> {
-  const browser = (await chromium.launch({
-    headless: !opts.headed,
-    args: ['--disable-blink-features=AutomationControlled', '--start-maximized'],
-  })) as unknown as PWBrowser;
+  const userDataDir = opts.userDataDir ?? join(tmpdir(), 'bls-login-bot-profile');
 
-  const context = await browser.newContext({
+  // launchPersistentContext returns the CONTEXT directly (no separate browser).
+  const context = (await chromium.launchPersistentContext(userDataDir, {
+    headless: !opts.headed,
     viewport: null, // use the real window size
     locale: 'en-US',
-  });
+    args: ['--disable-blink-features=AutomationControlled', '--start-maximized'],
+  })) as unknown as BrowserContext;
+
   context.setDefaultTimeout(opts.timeoutMs);
 
-  const page = await context.newPage();
+  // A persistent context already has an initial page; reuse it (or open one).
+  const page = context.pages()[0] ?? (await context.newPage());
 
   const close = async (): Promise<void> => {
-    // Best-effort teardown; never throw from cleanup.
+    // Best-effort teardown; never throw from cleanup. Closing the persistent
+    // context also closes the underlying browser process.
     await context.close().catch(() => {});
-    await browser.close().catch(() => {});
   };
 
-  return { browser, context, page, close };
+  return { context, page, close };
 }

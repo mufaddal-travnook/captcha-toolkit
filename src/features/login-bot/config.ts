@@ -30,12 +30,16 @@ export interface VisaFormConfig {
   enabled: boolean;
   /** Submit the form after filling it. */
   submit: boolean;
-  /** Dropdown values (matched case-insensitively, "contains"). */
-  location: string; // e.g. "Dubai" | "Abu Dhabi"
-  visaType: string; // e.g. "Schengen Visa/ Short Term Visa"
-  visaSubType: string; // e.g. "Tourist Visa" | "Business Visa"
-  appointmentCategory: string; // e.g. "Normal" | "Prime Time"
-  appointmentFor: 'Individual' | 'Family';
+  /**
+   * If true, fill+submit ALL 8 combinations (see visaCombos.ALL_COMBOS).
+   * If false, use the single combo from visaCombos.SINGLE_COMBO.
+   */
+  runAll: boolean;
+  /**
+   * On landing at /account/bot, go back one page, re-fill and re-submit, up to
+   * this many times before giving up on a combo. 0 = no recovery.
+   */
+  botRecoveryAttempts: number;
 }
 
 export interface DashboardConfig {
@@ -72,7 +76,7 @@ function idRange(prefix: string, n: number): string[] {
 export const DEFAULT_CONFIG: LoginBotConfig = {
   url: 'https://uae.blsspainglobal.com/Global/Account/LogIn?ReturnUrl=%2FGlobal%2Fbls%2FVisaTypeVerification',
   headed: true,
-  keepOpen: false,
+  keepOpen: true,
   solver: 'openai',
   retries: 3,
   backoffMs: 1500,
@@ -101,10 +105,8 @@ export const DEFAULT_CONFIG: LoginBotConfig = {
   visaForm: {
     enabled: true,
     submit: true,
-    location: 'Dubai', // change to 'Abu Dhabi' as needed
-    visaType: 'Schengen',
-    visaSubType: 'Tourist',
-    appointmentCategory: 'Normal',
-    appointmentFor: 'Individual',
+    // false → single combo (visaCombos.SINGLE_COMBO); true → all 8 combos.
+    runAll: false,
+    botRecoveryAttempts: 1,
   },
 };

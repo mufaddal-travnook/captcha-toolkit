@@ -11,15 +11,32 @@ import { FatalError } from './errors.js';
 import { createLogger } from './logger.js';
 import { DEFAULT_CONFIG, type LoginBotConfig } from './config.js';
 
+/** Recursively-optional config, so callers can override just nested fields.
+ *  Arrays and primitives are kept whole (not recursed into). */
+type DeepPartial<T> = {
+  [K in keyof T]?: T[K] extends readonly unknown[] ? T[K] : T[K] extends object ? DeepPartial<T[K]> : T[K];
+};
+
 export interface RunLoginOptions {
-  config?: Partial<LoginBotConfig>;
+  config?: DeepPartial<LoginBotConfig>;
   credentials: Credentials;
   /** Lockfile path; defaults to the OS temp dir. */
   lockPath?: string;
+  /** Persistent-profile dir. Defaults to a shared temp profile. */
+  userDataDir?: string;
 }
 
 export async function runLogin(opts: RunLoginOptions): Promise<LoginResult> {
-  const config: LoginBotConfig = { ...DEFAULT_CONFIG, ...opts.config };
+  // Shallow-merge top level, but DEEP-merge the nested config objects so a
+  // partial override (e.g. { visaForm: { submit: false } }) keeps the rest.
+  const o = opts.config ?? {};
+  const config: LoginBotConfig = {
+    ...DEFAULT_CONFIG,
+    ...o,
+    selectors: { ...DEFAULT_CONFIG.selectors, ...(o.selectors ?? {}) },
+    dashboard: { ...DEFAULT_CONFIG.dashboard, ...(o.dashboard ?? {}) },
+    visaForm: { ...DEFAULT_CONFIG.visaForm, ...(o.visaForm ?? {}) },
+  };
   const log = createLogger();
 
   if (config.solver === 'openai' && !process.env.OPENAI_API_KEY) {
@@ -37,6 +54,7 @@ export async function runLogin(opts: RunLoginOptions): Promise<LoginResult> {
   const { page, close } = await launchBrowser({
     headed: config.headed,
     timeoutMs: config.timeoutMs,
+    userDataDir: opts.userDataDir,
   });
 
   try {

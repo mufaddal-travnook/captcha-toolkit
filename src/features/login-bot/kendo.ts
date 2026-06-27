@@ -11,6 +11,7 @@
  */
 import type { Page, Locator } from 'playwright';
 import { humanPause } from './human.js';
+import { humanClick } from './safeClick.js';
 
 /**
  * Find the visible Kendo dropdown wrapper for a base field id (e.g. "Location").
@@ -46,8 +47,8 @@ export async function selectKendoOption(
   optionText: string,
 ): Promise<void> {
   await wrapper.scrollIntoViewIfNeeded().catch(() => {});
-  await humanPause(200, 500);
-  await wrapper.click(); // opens the popup
+  await humanPause(250, 600);
+  await humanClick(page, wrapper); // move cursor to the widget, then open the popup
 
   // The popup list is `#<inputId>_listbox` (referenced by aria-owns).
   const list = page.locator(`#${inputId}_listbox`);
@@ -61,8 +62,9 @@ export async function selectKendoOption(
   const contains = list.locator('li', { hasText: new RegExp(escapeRe(optionText), 'i') });
   const option = ((await exact.count()) > 0 ? exact : contains).first();
   await option.waitFor({ state: 'visible', timeout: 8000 });
-  await humanPause(150, 400);
-  await option.click();
+  // A human reads the open list a beat before picking, then moves to the item.
+  await humanPause(300, 750);
+  await humanClick(page, option);
 
   // Let Kendo's change handler fire and populate dependent dropdowns.
   await humanPause(400, 900);
