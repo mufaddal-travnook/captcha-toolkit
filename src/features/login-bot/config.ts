@@ -19,10 +19,21 @@ export interface LoginBotConfig {
   /** Per-action timeout (ms). */
   timeoutMs: number;
   selectors: Selectors;
+  /** Captcha solve retry tuning. */
+  captcha: CaptchaConfig;
   /** Post-login dashboard step (second captcha). */
   dashboard: DashboardConfig;
   /** Visa-type form filled after the dashboard step. */
   visaForm: VisaFormConfig;
+}
+
+export interface CaptchaConfig {
+  /** How many extra attempts after the first (total tries = retries + 1). */
+  retries: number;
+  /** Base backoff between retries (ms); jittered ±25% and grows exponentially. */
+  backoffMs: number;
+  /** How long to wait for the "Verified!" message before declaring a miss (ms). */
+  verifyTimeoutMs: number;
 }
 
 export interface VisaFormConfig {
@@ -40,6 +51,16 @@ export interface VisaFormConfig {
    * this many times before giving up on a combo. 0 = no recovery.
    */
   botRecoveryAttempts: number;
+  /**
+   * In runAll mode, wait this long (ms) between combinations — gives the site a
+   * breather and looks less robotic. Jittered ±25%.
+   */
+  betweenCombosMs: number;
+  /**
+   * In runAll mode, if one combo fails (can't reach the form / errors), keep
+   * going with the next combo instead of aborting the whole run.
+   */
+  continueOnComboFailure: boolean;
 }
 
 export interface DashboardConfig {
@@ -95,6 +116,11 @@ export const DEFAULT_CONFIG: LoginBotConfig = {
     reloadButton: '.img-action-div:has-text("Reload")',
     submitSelection: '.img-action-div:has-text("Submit")',
   },
+  captcha: {
+    retries: 4, // 5 total tries — captcha misreads are common, retries are cheap-ish
+    backoffMs: 1200,
+    verifyTimeoutMs: 8000,
+  },
   dashboard: {
     enabled: true,
     // Dashboard reuses the same ids as login: #btnVerify ("Verify Selection")
@@ -108,5 +134,7 @@ export const DEFAULT_CONFIG: LoginBotConfig = {
     // false → single combo (visaCombos.SINGLE_COMBO); true → all 8 combos.
     runAll: false,
     botRecoveryAttempts: 1,
+    betweenCombosMs: 6000, // breather between combos in runAll mode
+    continueOnComboFailure: true,
   },
 };

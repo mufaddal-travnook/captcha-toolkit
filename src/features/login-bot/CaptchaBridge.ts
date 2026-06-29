@@ -17,7 +17,7 @@ import type { Frame, Page } from 'playwright';
 import { createSolver } from '../captcha-solver/index.js';
 import type { SolverName } from '../../core/types.js';
 import type { Selectors } from './config.js';
-import { RetryableError, withRetry } from './errors.js';
+import { CaptchaError, withRetry, type CaptchaFailureReason } from './errors.js';
 import { createLogger, type Logger } from './logger.js';
 import { humanPause } from './human.js';
 
@@ -31,7 +31,9 @@ export interface CaptchaResult {
 export async function getCaptchaFrame(page: Page, frameSelector: string): Promise<Frame> {
   const handle = await page.waitForSelector(frameSelector, { state: 'attached' });
   const frame = await handle.contentFrame();
-  if (!frame) throw new RetryableError('Captcha iframe present but content frame not ready.');
+  if (!frame) {
+    throw new CaptchaError('IFRAME_NOT_READY', 'Captcha iframe present but content frame not ready.');
+  }
   return frame;
 }
 
@@ -110,9 +112,9 @@ export async function solveCaptcha(
   selectors: Selectors,
   solverName: SolverName,
   log: Logger = createLogger(),
+  verifyTimeoutMs = 8000,
 ): Promise<CaptchaResult> {
   const frame = await getCaptchaFrame(page, selectors.captchaFrame);
-  log.info('Entered captcha iframe.');
 
   // 1. Anti-bot trick: the page stacks MANY tile sets at the SAME 9 screen
   //    positions (decoys underneath the active one). DOM order is unreliable,
@@ -120,30 +122,28 @@ export async function solveCaptcha(
   //    its (x,y) center, and for each of the 9 slots keep the TOPMOST tile
   //    (highest in paint order = what the user sees & clicks). Order the 9 slots
   //    in reading order (row-major) so index 0-8 matches the screenshot.
-  await frame.locator(selectors.tileImage).last().waitFor({ state: 'attached' });
+  await frame
+    .locator(selectors.tileImage)
+    .last()
+    .waitFor({ state: 'attached', timeout: 8000 })
+    .catch(() => {
+      throw new CaptchaError('IFRAME_NOT_READY', 'Captcha tiles did not attach in time.');
+    });
   const slots = await resolveActiveTiles(frame, selectors.tileImage);
   if (slots.length !== 9) {
-    throw new RetryableError(`Expected 9 grid slots, resolved ${slots.length}.`);
+    throw new CaptchaError('WRONG_TILE_COUNT', `Expected 9 grid slots, resolved ${slots.length}.`);
   }
-  log.info(`Resolved 9 active tile slots by screen position.`);
-
   // Screenshot the active grid + its prompt so the model reads the target.
   const captchaImage = await screenshotCaptcha(frame, selectors);
-  log.info(`Captured captcha (${captchaImage.length} bytes) for solving.`);
 
   // 2. one OpenAI call: the model reads the target AND the grid; we get matches.
-  const solver = createSolver(solverName, {
-    openai: { onRawResponse: (raw) => log.info(`AI raw response: ${raw.replace(/\s+/g, ' ').trim()}`) },
-  });
+  log.step('Fetching data from AI…');
+  const solver = createSolver(solverName);
   const solution = await solver.solve({ image: captchaImage }); // no target hint — model reads it
   const target = solution.targetNumber;
-  const readValues = solution.cells.map((c) => c.value || '∅').join(', ');
-  log.info(`AI target number: ${target}`);
-  log.info(`AI parsed values: [${readValues}]`);
-  log.info(`AI matches (indexes 0-8): [${solution.matches.join(', ')}]`);
 
   if (solution.matches.length === 0) {
-    throw new RetryableError(`Solver found no tiles matching ${target}.`);
+    throw new CaptchaError('NO_MATCHES', `Solver found no tiles matching ${target}.`);
   }
 
   // 3. click each matching slot BY COORDINATE inside the frame. Clicking the
@@ -155,24 +155,25 @@ export async function solveCaptcha(
     await humanPause(150, 400);
     await page.mouse.move(slot.pageX, slot.pageY, { steps: 4 });
     await page.mouse.click(slot.pageX, slot.pageY);
-    log.info(`Clicked slot #${index} at (${slot.pageX}, ${slot.pageY}).`);
     await humanPause(350, 900);
   }
 
   // 4. submit selection. Like the tiles, action controls may be stacked per
   //    set — the active one is last/on-top, so use last() + force.
   await humanPause(500, 1100); // review the selection before submitting
-  log.step('Clicking Submit Selection…');
   await frame.locator(selectors.submitSelection).last().click({ force: true });
 
   // 5. success = "Verified!" message becomes visible.
   const verified = await frame
     .locator(selectors.verifiedMessage)
     .first()
-    .waitFor({ state: 'visible', timeout: 8000 })
+    .waitFor({ state: 'visible', timeout: verifyTimeoutMs })
     .then(() => true)
     .catch(() => false);
 
+  if (!verified) {
+    throw new CaptchaError('VERIFY_TIMEOUT', `Captcha not verified (target ${target}).`);
+  }
   return { target, matches: solution.matches, verified };
 }
 
@@ -183,36 +184,80 @@ export async function reloadCaptcha(page: Page, selectors: Selectors): Promise<v
 }
 
 /**
- * Solve the captcha with retry + reload. Shared by BOTH the login captcha and
- * the dashboard captcha (identical DOM). `label` just tags the log lines.
+ * Per-failure-reason retry policy. Decides whether to click "Reload Images"
+ * before retrying, an optional fixed wait (overriding the backoff), and the
+ * verify-timeout to use on the next attempt.
+ *
+ * - IFRAME_NOT_READY: the grid wasn't loaded — DON'T reload (that would discard
+ *   a fine captcha and waste an OpenAI call); just wait briefly and retry.
+ * - WRONG_TILE_COUNT / NO_MATCHES: genuinely bad/misread grid — reload for a
+ *   fresh one, then retry (new screenshot + new OpenAI call).
+ * - VERIFY_TIMEOUT: solve may have been right but confirmation was slow — reload
+ *   and retry, but allow a longer verify wait next time.
+ */
+const RETRY_POLICY: Record<
+  CaptchaFailureReason,
+  { reload: boolean; fixedWaitMs?: number; nextVerifyTimeoutMs?: number }
+> = {
+  IFRAME_NOT_READY: { reload: false, fixedWaitMs: 1200 },
+  WRONG_TILE_COUNT: { reload: true },
+  NO_MATCHES: { reload: true },
+  VERIFY_TIMEOUT: { reload: true, nextVerifyTimeoutMs: 14_000 },
+};
+
+export interface SolveRetryOptions {
+  retries: number;
+  backoffMs: number;
+  label?: string;
+  /** Initial verify-message wait (ms). */
+  verifyTimeoutMs?: number;
+}
+
+/**
+ * Solve the captcha with FAILURE-TYPE-AWARE retry. Shared by the login and
+ * dashboard captchas (identical DOM). Logs each attempt as `N/M` with the
+ * reason, reloads only when the failure warrants it, and backs off with jitter.
  */
 export async function solveCaptchaWithRetry(
   page: Page,
   selectors: Selectors,
   solverName: SolverName,
-  opts: { retries: number; backoffMs: number; label?: string },
+  opts: SolveRetryOptions,
   log: Logger = createLogger(),
 ): Promise<CaptchaResult> {
   const tag = opts.label ? `${opts.label} ` : '';
-  let attempt = 0;
+  const total = opts.retries + 1;
+  let verifyTimeout = opts.verifyTimeoutMs ?? 8000;
+  let attemptNo = 0;
+
   return withRetry(
     async () => {
-      attempt++;
-      log.step(`Solving ${tag}captcha (attempt ${attempt}) via '${solverName}' solver…`);
-      const result = await solveCaptcha(page, selectors, solverName, log);
-      if (!result.verified) {
-        throw new RetryableError(`Captcha not verified (target ${result.target}).`);
-      }
-      log.info(`${tag}captcha verified ✓ (target ${result.target}).`);
+      attemptNo++;
+      log.step(`${tag}captcha attempt ${attemptNo}/${total}…`);
+      const result = await solveCaptcha(page, selectors, solverName, log, verifyTimeout);
+      log.info(`${tag}captcha verified ✓ (target ${result.target}, attempt ${attemptNo}/${total})`);
       return result;
     },
     {
       retries: opts.retries,
       backoffMs: opts.backoffMs,
       onRetry: async (n, err) => {
-        log.warn(`Captcha attempt failed: ${err instanceof Error ? err.message : err}`);
-        log.step(`Reloading images before retry ${n}…`);
-        await reloadCaptcha(page, selectors).catch(() => {});
+        const reason: CaptchaFailureReason | 'UNKNOWN' =
+          err instanceof CaptchaError ? err.reason : 'UNKNOWN';
+        const msg = err instanceof Error ? err.message : String(err);
+        log.warn(`${tag}captcha attempt ${attemptNo}/${total} failed — reason: ${reason} — ${msg}`);
+
+        const policy = reason !== 'UNKNOWN' ? RETRY_POLICY[reason] : { reload: true };
+        if (policy.nextVerifyTimeoutMs) verifyTimeout = policy.nextVerifyTimeoutMs;
+
+        if (policy.reload) {
+          log.info(`${tag}reloading captcha images before retry ${n}…`);
+          await reloadCaptcha(page, selectors).catch(() => {});
+        } else {
+          log.info(`${tag}not reloading (reason ${reason}); will just wait + retry.`);
+        }
+        // A fixed wait overrides the default jittered backoff for this reason.
+        return policy.fixedWaitMs;
       },
     },
   );

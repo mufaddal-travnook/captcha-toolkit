@@ -33,22 +33,25 @@ export async function runDashboardCaptcha(
   const urlBefore = page.url();
 
   // 1. Click "Verify Selection" (#btnVerify) to open the dashboard captcha.
-  log.step('Dashboard: clicking Verify Selection…');
   await safeClick(page, page.locator(dash.verifyButton).first());
 
   // 2. Solve the dashboard captcha (identical DOM → reuse the shared solver).
-  const captcha = await solveCaptchaWithRetry(
+  await solveCaptchaWithRetry(
     page,
     sel,
     config.solver,
-    { retries: config.retries, backoffMs: config.backoffMs, label: 'dashboard' },
+    {
+      retries: config.captcha.retries,
+      backoffMs: config.captcha.backoffMs,
+      verifyTimeoutMs: config.captcha.verifyTimeoutMs,
+      label: 'dashboard',
+    },
     log,
   );
 
   // 3. Click "Submit" (#btnSubmit), revealed after the captcha verifies, then
   //    wait for the next page (the form) to load.
   await humanPause(700, 1500);
-  log.step('Dashboard: clicking Submit…');
   await Promise.all([
     page.waitForLoadState('networkidle').catch(() => {}),
     safeClick(page, page.locator(dash.submitButton).first()),
@@ -60,7 +63,6 @@ export async function runDashboardCaptcha(
     // @ts-expect-error browser global available at runtime inside waitForFunction
     location.href !== prev;
   await page.waitForFunction(navAway, urlBefore, { timeout: 15_000 }).catch(() => {});
-  log.info(`Dashboard captcha complete (target ${captcha.target}). New page: ${page.url()}`);
 }
 
 export async function runDashboardStep(

@@ -34,6 +34,7 @@ export async function runLogin(opts: RunLoginOptions): Promise<LoginResult> {
     ...DEFAULT_CONFIG,
     ...o,
     selectors: { ...DEFAULT_CONFIG.selectors, ...(o.selectors ?? {}) },
+    captcha: { ...DEFAULT_CONFIG.captcha, ...(o.captcha ?? {}) },
     dashboard: { ...DEFAULT_CONFIG.dashboard, ...(o.dashboard ?? {}) },
     visaForm: { ...DEFAULT_CONFIG.visaForm, ...(o.visaForm ?? {}) },
   };
@@ -47,10 +48,8 @@ export async function runLogin(opts: RunLoginOptions): Promise<LoginResult> {
   }
 
   const lockPath = opts.lockPath ?? join(tmpdir(), 'bls-login-bot.lock');
-  log.step(`Acquiring single-instance lock: ${lockPath}`);
   const lock = await acquireLock(lockPath);
 
-  log.step(`Launching ${config.headed ? 'headed' : 'headless'} stealth Chrome…`);
   const { page, close } = await launchBrowser({
     headed: config.headed,
     timeoutMs: config.timeoutMs,
@@ -64,13 +63,12 @@ export async function runLogin(opts: RunLoginOptions): Promise<LoginResult> {
       // (the run is done) but keep the process alive so the window persists.
       log.info(result.message);
       await lock.release().catch(() => {});
-      log.info('Leaving browser open (keepOpen). Close the window or press Ctrl+C to exit.');
+      log.info('Browser left open. Close the window or press Ctrl+C to exit.');
       await waitForBrowserClose(page);
     }
     return result;
   } finally {
     if (!config.keepOpen) {
-      log.info('Closing browser and releasing lock.');
       await close();
       await lock.release().catch(() => {});
     }
