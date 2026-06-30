@@ -86,17 +86,34 @@ export async function runLoginFlow(
 
   // After verification the Login button is revealed; submit.
   await humanPause(700, 1600); // brief pause after the captcha resolves
+  // The submit button is only revealed AFTER the captcha verifies — over a slow
+  // proxy this DOM update lags, so wait for it to be visible before clicking.
+  await page.locator(sel.submitButton).waitFor({ state: 'visible', timeout: 15_000 }).catch(() => {});
+  const urlBeforeLogin = page.url();
   await safeClick(page, page.locator(sel.submitButton));
 
   // Detect outcome: a URL change away from the login page implies success.
+  // Over a proxy the redirect is slow, so WAIT for navigation rather than
+  // checking the URL immediately. Poll until we leave /Account/LogIn.
+  await page
+    .waitForURL((url) => !/Account\/LogIn/i.test(url.href), { timeout: 25_000 })
+    .catch(() => {});
   await page.waitForLoadState('networkidle').catch(() => {});
   await shooter.shot(page, 'after-login-submit');
   const success = !/Account\/LogIn/i.test(page.url());
 
   if (!success) {
-    const message =
-      'Captcha verified but login did not redirect — check credentials or post-login step.';
+    // Capture WHY: log any visible validation/error message on the login form.
+    const err = await page
+      .locator('.validation-summary, .text-danger, .field-validation-error, .alert')
+      .filter({ hasText: /\S/ })
+      .first()
+      .textContent()
+      .catch(() => null);
+    const detail = err ? ` Page says: "${err.replace(/\s+/g, ' ').trim().slice(0, 200)}"` : '';
+    const message = `Login did not redirect (still at ${page.url()}).${detail}`;
     log.warn(message);
+    void urlBeforeLogin;
     return { success: false, target: captcha.target, matches: captcha.matches, message };
   }
 
