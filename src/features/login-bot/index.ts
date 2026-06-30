@@ -13,6 +13,7 @@ import { DEFAULT_CONFIG, type LoginBotConfig } from './config.js';
 import { ALL_COMBOS, comboLabel, type VisaCombo } from './visaCombos.js';
 import { createShooter } from './screenshot.js';
 import { createSummaryNotifier } from '../notifier/index.js';
+import { checkProxy } from './proxyCheck.js';
 
 /** Recursively-optional config, so callers can override just nested fields.
  *  Arrays and primitives are kept whole (not recursed into). */
@@ -50,6 +51,23 @@ export async function runLogin(opts: RunLoginOptions): Promise<LoginResult> {
   }
   if (!opts.credentials.email || !opts.credentials.password) {
     throw new FatalError('Missing credentials. Set BLS_EMAIL and BLS_PASSWORD in .env.');
+  }
+
+  // Pre-flight: if a proxy is configured, verify the tunnel is actually up
+  // BEFORE doing anything. A dead tunnel otherwise fails later as a confusing
+  // 403 / "no redirect". On failure, alert and stop (a retry won't help here).
+  if (config.proxyServer) {
+    log.step(`Checking proxy ${config.proxyServer}…`);
+    const check = await checkProxy(config.proxyServer);
+    if (!check.ok) {
+      const msg = `Proxy/tunnel unreachable (${config.proxyServer}): ${check.error}. Is the SSH tunnel up?`;
+      log.error(msg);
+      await createSummaryNotifier({ log: () => {} })
+        .notify('error', { message: msg, combo: 'proxy pre-flight' })
+        .catch(() => {});
+      throw new FatalError(msg);
+    }
+    log.info(`Proxy OK — exit IP: ${check.ip}`);
   }
 
   const lockPath = opts.lockPath ?? join(tmpdir(), 'bls-login-bot.lock');
