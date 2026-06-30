@@ -106,7 +106,7 @@ export const DEFAULT_CONFIG: LoginBotConfig = {
   url: 'https://uae.blsspainglobal.com/Global/Account/LogIn?ReturnUrl=%2FGlobal%2Fbls%2FVisaTypeVerification',
   headed: true,
   keepOpen: true,
-  screenshots: false, // enable with --screenshots (great for server debugging)
+  screenshots: true, // always capture step screenshots (server debugging)
   screenshotsFullPage: false,
   solver: 'openai',
   retries: 3,
