@@ -2,9 +2,10 @@
  * Debug screenshots — capture the page at major steps so failures can be
  * diagnosed after the fact (especially on a headless/xvfb server you can't see).
  *
- * Config-gated: when disabled, `shot()` is a cheap no-op. Files are written to
- * a per-run folder with a zero-padded sequence + slugged label so they sort in
- * order, e.g.  screenshots/2026-06-30_14-22-01/03_login-captcha-solved.png
+ * Config-gated: when disabled, `shot()` is a cheap no-op. All files are written
+ * FLAT into ./screenshots (no subfolders). Each filename is timestamped so runs
+ * don't collide and they sort chronologically, e.g.
+ *   screenshots/143012-001-login-page-loaded.png
  */
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -14,13 +15,13 @@ export interface Shooter {
   readonly enabled: boolean;
   /** Capture the current page, tagged with `label`. Never throws. */
   shot: (page: Page, label: string) => Promise<void>;
-  /** Directory screenshots are written to (for logging). */
+  /** Directory screenshots are written to. */
   readonly dir: string;
 }
 
 export interface ShooterOptions {
   enabled: boolean;
-  /** Base directory; a per-run subfolder is created under it. */
+  /** Directory for screenshots (flat, no subfolders). Defaults to ./screenshots. */
   baseDir?: string;
   /** Full-page screenshot (vs just the viewport). */
   fullPage?: boolean;
@@ -30,8 +31,7 @@ export interface ShooterOptions {
 
 /** Build a screenshot helper. Disabled → all calls no-op. */
 export function createShooter(opts: ShooterOptions): Shooter {
-  const base = opts.baseDir ?? 'screenshots';
-  const runDir = join(base, runStamp());
+  const dir = opts.baseDir ?? 'screenshots';
   const log = opts.log ?? (() => {});
   let seq = 0;
   let dirReady: Promise<void> | null = null;
@@ -39,26 +39,24 @@ export function createShooter(opts: ShooterOptions): Shooter {
   const shot = async (page: Page, label: string): Promise<void> => {
     if (!opts.enabled) return;
     try {
-      if (!dirReady) dirReady = mkdir(runDir, { recursive: true }).then(() => {});
+      if (!dirReady) dirReady = mkdir(dir, { recursive: true }).then(() => {});
       await dirReady;
       seq += 1;
-      const name = `${String(seq).padStart(2, '0')}_${slug(label)}.png`;
-      const file = join(runDir, name);
-      await page.screenshot({ path: file, fullPage: opts.fullPage ?? false });
-      log(`📸 ${file}`);
+      const name = `${hhmmss()}-${String(seq).padStart(3, '0')}-${slug(label)}.png`;
+      await page.screenshot({ path: join(dir, name), fullPage: opts.fullPage ?? false });
     } catch (err) {
       log(`Screenshot failed (${label}): ${err instanceof Error ? err.message : err}`);
     }
   };
 
-  return { enabled: opts.enabled, shot, dir: runDir };
+  return { enabled: opts.enabled, shot, dir };
 }
 
-/** A filesystem-safe timestamp for the run folder. */
-function runStamp(): string {
+/** HHMMSS for the filename prefix. */
+function hhmmss(): string {
   const d = new Date();
   const p = (n: number): string => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}-${p(d.getMinutes())}-${p(d.getSeconds())}`;
+  return `${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
 }
 
 /** Slugify a label for a filename. */

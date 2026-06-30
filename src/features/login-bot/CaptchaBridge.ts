@@ -137,7 +137,6 @@ export async function solveCaptcha(
   const captchaImage = await screenshotCaptcha(frame, selectors);
 
   // 2. one OpenAI call: the model reads the target AND the grid; we get matches.
-  log.step('Fetching data from AI…');
   const solver = createSolver(solverName);
   const solution = await solver.solve({ image: captchaImage }); // no target hint — model reads it
   const target = solution.targetNumber;

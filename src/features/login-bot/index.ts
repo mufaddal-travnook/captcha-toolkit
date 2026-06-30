@@ -65,9 +65,8 @@ export async function runLogin(opts: RunLoginOptions): Promise<LoginResult> {
   const shooter = createShooter({
     enabled: config.screenshots,
     fullPage: config.screenshotsFullPage,
-    log: (m) => log.info(m),
+    log: (m) => log.warn(m), // only failures are logged
   });
-  if (shooter.enabled) log.info(`Screenshots ON → ${shooter.dir}`);
 
   try {
     const result = await runLoginFlow(page, config, opts.credentials, log, opts.combos, shooter);
