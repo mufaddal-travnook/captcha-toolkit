@@ -11,6 +11,10 @@ export interface LoginBotConfig {
   headed: boolean;
   /** Keep the browser open after the run instead of closing it. */
   keepOpen: boolean;
+  /** Save debug screenshots at major steps (to ./screenshots/<run>/). */
+  screenshots: boolean;
+  /** Capture full-page screenshots (vs viewport) when screenshots are on. */
+  screenshotsFullPage: boolean;
   /** Which captcha solver to use. */
   solver: SolverName;
   /** Retry/backoff for transient failures and captcha misses. */
@@ -102,6 +106,8 @@ export const DEFAULT_CONFIG: LoginBotConfig = {
   url: 'https://uae.blsspainglobal.com/Global/Account/LogIn?ReturnUrl=%2FGlobal%2Fbls%2FVisaTypeVerification',
   headed: true,
   keepOpen: true,
+  screenshots: false, // enable with --screenshots (great for server debugging)
+  screenshotsFullPage: false,
   solver: 'openai',
   retries: 3,
   backoffMs: 1500,

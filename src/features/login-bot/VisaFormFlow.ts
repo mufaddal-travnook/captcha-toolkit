@@ -18,6 +18,7 @@ import { humanPause, sleep } from './human.js';
 import { ALL_COMBOS, SINGLE_COMBO, comboLabel, type VisaCombo } from './visaCombos.js';
 import { runDashboardCaptcha } from './DashboardFlow.js';
 import { createNotifier, type Notifier } from '../notifier/index.js';
+import { createShooter, type Shooter } from './screenshot.js';
 
 const APPT_URL = 'https://uae.blsspainglobal.com/Global/bls/visatype';
 
@@ -52,6 +53,7 @@ export async function runVisaFormFlow(
   config: LoginBotConfig,
   log: Logger = createLogger(),
   combosOverride?: VisaCombo[],
+  shooter: Shooter = createShooter({ enabled: false }),
 ): Promise<void> {
   const form = config.visaForm;
   if (!form.enabled) return;
@@ -80,7 +82,7 @@ export async function runVisaFormFlow(
         }
       }
 
-      await fillAndSubmitCombo(page, config, combo, log, notifier);
+      await fillAndSubmitCombo(page, config, combo, log, notifier, shooter);
 
       // If this combo landed us on the bot page, recover (back → captcha → form)
       // and re-submit the SAME combo, up to botRecoveryAttempts.
@@ -93,7 +95,7 @@ export async function runVisaFormFlow(
           log.warn('Recovery failed: could not re-open the visa form.');
           break;
         }
-        await fillAndSubmitCombo(page, config, combo, log, notifier);
+        await fillAndSubmitCombo(page, config, combo, log, notifier, shooter);
       }
 
       const blocked = isBotPage(page);
@@ -173,6 +175,7 @@ async function fillAndSubmitCombo(
   combo: VisaCombo,
   log: Logger,
   notifier: Notifier,
+  shooter: Shooter = createShooter({ enabled: false }),
 ): Promise<void> {
   const form = config.visaForm;
 
@@ -208,6 +211,8 @@ async function fillAndSubmitCombo(
   // 5. Appointment For (radio: Individual / Family).
   await pickAppointmentFor(page, combo.appointmentFor, log);
 
+  await shooter.shot(page, `form-filled-${comboLabel(combo)}`);
+
   // 6. Submit.
   if (form.submit) {
     await humanPause(600, 1400);
@@ -218,6 +223,7 @@ async function fillAndSubmitCombo(
     // Submit often returns a result MODAL (e.g. "No Appointments Available")
     // instead of navigating. Capture+log it before waiting for any URL change.
     const modal = await logResultModal(page, combo, log);
+    await shooter.shot(page, `result-${comboLabel(combo)}`);
 
     // SLOT FOUND → notify. Conservative: anything that isn't a known "no slots"
     // message counts as a potential hit (better to over-notify than miss one).

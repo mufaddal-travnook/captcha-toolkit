@@ -11,6 +11,7 @@ import { FatalError } from './errors.js';
 import { createLogger } from './logger.js';
 import { DEFAULT_CONFIG, type LoginBotConfig } from './config.js';
 import { ALL_COMBOS, comboLabel, type VisaCombo } from './visaCombos.js';
+import { createShooter } from './screenshot.js';
 
 /** Recursively-optional config, so callers can override just nested fields.
  *  Arrays and primitives are kept whole (not recursed into). */
@@ -59,8 +60,15 @@ export async function runLogin(opts: RunLoginOptions): Promise<LoginResult> {
     userDataDir: opts.userDataDir,
   });
 
+  const shooter = createShooter({
+    enabled: config.screenshots,
+    fullPage: config.screenshotsFullPage,
+    log: (m) => log.info(m),
+  });
+  if (shooter.enabled) log.info(`Screenshots ON → ${shooter.dir}`);
+
   try {
-    const result = await runLoginFlow(page, config, opts.credentials, log, opts.combos);
+    const result = await runLoginFlow(page, config, opts.credentials, log, opts.combos, shooter);
     if (config.keepOpen) {
       // Surface the result now, then leave the browser open. Release the lock
       // (the run is done) but keep the process alive so the window persists.

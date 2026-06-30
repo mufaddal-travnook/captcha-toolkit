@@ -13,6 +13,7 @@ import { safeClick } from './safeClick.js';
 import { createLogger, type Logger } from './logger.js';
 import { humanPause } from './human.js';
 import type { VisaCombo } from './visaCombos.js';
+import { createShooter, type Shooter } from './screenshot.js';
 
 /**
  * The captcha part of the dashboard: click "Verify Selection", solve the
@@ -71,9 +72,12 @@ export async function runDashboardStep(
   config: LoginBotConfig,
   log: Logger = createLogger(),
   combosOverride?: VisaCombo[],
+  shooter: Shooter = createShooter({ enabled: false }),
 ): Promise<void> {
+  await shooter.shot(page, 'dashboard-loaded');
   // Verify Selection → captcha → Submit → visa form opens.
   await runDashboardCaptcha(page, config, log);
+  await shooter.shot(page, 'visa-form-opened');
   // The new page is the visa-type form — fill it (optionally a combo subset).
-  await runVisaFormFlow(page, config, log, combosOverride);
+  await runVisaFormFlow(page, config, log, combosOverride, shooter);
 }

@@ -10,6 +10,7 @@
  *                                        # keeps the browser open so YOU submit.
  *   npm run login -- --all               # all 8 combos in ONE session
  *   npm run login -- --batched           # 8 combos in 4 fresh sessions (2 each)
+ *   npm run login -- --screenshots       # save debug screenshots at each step
  */
 import { runLogin, runBatched, FatalError } from './features/login-bot/index.js';
 import type { SolverName } from './core/types.js';
@@ -26,6 +27,7 @@ async function main(): Promise<void> {
   const noSubmit = argv.includes('--no-submit');
   const runAll = argv.includes('--all');
   const batched = argv.includes('--batched');
+  const screenshots = argv.includes('--screenshots');
   const credentials = {
     email: process.env.BLS_EMAIL ?? '',
     password: process.env.BLS_PASSWORD ?? '',
@@ -34,7 +36,7 @@ async function main(): Promise<void> {
   // Batched mode: 4 fresh sessions of 2 combos each (own browser/profile/login).
   if (batched) {
     const results = await runBatched({
-      config: { solver, headed },
+      config: { solver, headed, screenshots },
       credentials,
     });
     const okCount = results.filter((r) => r.success).length;
@@ -58,6 +60,7 @@ async function main(): Promise<void> {
       solver,
       headed,
       keepOpen,
+      screenshots,
       visaForm: {
         ...(noSubmit ? { submit: false } : {}),
         ...(runAll ? { runAll: true } : {}),

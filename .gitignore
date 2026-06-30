@@ -16,3 +16,6 @@ playwright-report/
 
 # Server run logs (scripts/run.sh)
 logs/
+
+# Debug screenshots (--screenshots)
+screenshots/
