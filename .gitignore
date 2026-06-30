@@ -13,3 +13,6 @@ samples/cells/
 *.lock
 test-results/
 playwright-report/
+
+# Server run logs (scripts/run.sh)
+logs/
