@@ -38,7 +38,15 @@ export async function runLoginFlow(
 
   // Navigate. A geo-block / 403 here is fatal (retry won't help).
   log.step('Logging in…');
-  const resp = await page.goto(config.url, { waitUntil: 'domcontentloaded' });
+  let resp;
+  try {
+    resp = await page.goto(config.url, { waitUntil: 'domcontentloaded' });
+  } catch (err) {
+    // Navigation itself failed (some blocks abort the request). Still screenshot
+    // whatever the page shows so you can see the block page.
+    await shooter.shot(page, 'navigation-failed');
+    throw new FatalError(`Navigation failed: ${err instanceof Error ? err.message : err}`);
+  }
   await shooter.shot(page, 'login-page-loaded');
   if (resp && (resp.status() === 403 || resp.status() === 203)) {
     await shooter.shot(page, `blocked-http-${resp.status()}`);
