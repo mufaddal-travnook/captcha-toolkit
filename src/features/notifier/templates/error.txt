@@ -1,0 +1,7 @@
+⚠️ AUTOMATION ERROR — BLS Spain
+
+Something went wrong during the run:
+💬 {{message}}
+
+📍 Context: {{combo}}
+🕒 {{timestamp}}

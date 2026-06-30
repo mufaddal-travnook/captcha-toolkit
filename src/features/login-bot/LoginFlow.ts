@@ -11,6 +11,7 @@ import { runDashboardStep } from './DashboardFlow.js';
 import { FatalError } from './errors.js';
 import { createLogger, type Logger } from './logger.js';
 import { humanPause } from './human.js';
+import type { VisaCombo } from './visaCombos.js';
 
 export interface Credentials {
   email: string;
@@ -29,6 +30,7 @@ export async function runLoginFlow(
   config: LoginBotConfig,
   creds: Credentials,
   log: Logger = createLogger(),
+  combosOverride?: VisaCombo[],
 ): Promise<LoginResult> {
   const sel = config.selectors;
 
@@ -82,7 +84,7 @@ export async function runLoginFlow(
   // Dashboard step: click "Verify Selection", solve the second captcha, then
   // fill + submit the visa form.
   if (config.dashboard.enabled) {
-    await runDashboardStep(page, config, log);
+    await runDashboardStep(page, config, log, combosOverride);
   }
 
   log.step('Automation complete.');

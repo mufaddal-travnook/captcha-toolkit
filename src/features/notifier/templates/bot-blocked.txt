@@ -1,0 +1,9 @@
+🚫 BOT BLOCKED — BLS Spain
+
+The automation was routed to the anti-bot page while processing:
+📍 {{combo}}
+
+🕒 {{timestamp}}
+🔗 {{url}}
+
+The run will continue with the next combination.

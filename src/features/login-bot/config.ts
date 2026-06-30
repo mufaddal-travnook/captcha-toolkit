@@ -61,6 +61,10 @@ export interface VisaFormConfig {
    * going with the next combo instead of aborting the whole run.
    */
   continueOnComboFailure: boolean;
+  /** Batched mode: combos per fresh-session batch. */
+  batchSize: number;
+  /** Batched mode: gap between batches (ms), jittered ±25%. */
+  betweenRunsMs: number;
 }
 
 export interface DashboardConfig {
@@ -136,5 +140,7 @@ export const DEFAULT_CONFIG: LoginBotConfig = {
     botRecoveryAttempts: 1,
     betweenCombosMs: 6000, // breather between combos in runAll mode
     continueOnComboFailure: true,
+    batchSize: 2, // batched mode: 2 combos per fresh session → 4 batches for 8 combos
+    betweenRunsMs: 45_000, // ~45s gap between batches (jittered)
   },
 };

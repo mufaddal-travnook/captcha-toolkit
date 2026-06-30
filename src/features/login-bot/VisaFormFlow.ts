@@ -17,6 +17,22 @@ import { createLogger, type Logger } from './logger.js';
 import { humanPause, sleep } from './human.js';
 import { ALL_COMBOS, SINGLE_COMBO, comboLabel, type VisaCombo } from './visaCombos.js';
 import { runDashboardCaptcha } from './DashboardFlow.js';
+import { createNotifier, type Notifier } from '../notifier/index.js';
+
+const APPT_URL = 'https://uae.blsspainglobal.com/Global/bls/visatype';
+
+/** Build the {{placeholder}} vars for a combo. */
+function comboVars(combo: VisaCombo): Record<string, string> {
+  return {
+    location: combo.location,
+    visaType: combo.visaType,
+    visaSubType: combo.visaSubType,
+    appointmentCategory: combo.appointmentCategory,
+    appointmentFor: combo.appointmentFor,
+    combo: comboLabel(combo),
+    url: APPT_URL,
+  };
+}
 
 /** Field id suffixes to probe when finding the visible decoy set. */
 const SUFFIXES = ['1', '2', '3', '4', '5', '6'];
@@ -35,12 +51,18 @@ export async function runVisaFormFlow(
   page: Page,
   config: LoginBotConfig,
   log: Logger = createLogger(),
+  combosOverride?: VisaCombo[],
 ): Promise<void> {
   const form = config.visaForm;
   if (!form.enabled) return;
 
-  const combos = form.runAll ? ALL_COMBOS : [SINGLE_COMBO];
-  if (form.runAll) log.step(`Visa form: running ALL ${combos.length} combinations.`);
+  // Priority: explicit override (a batch's combos) → all 8 → single combo.
+  const combos = combosOverride ?? (form.runAll ? ALL_COMBOS : [SINGLE_COMBO]);
+  if (combos.length > 1) log.step(`Visa form: running ${combos.length} combinations.`);
+
+  // Notifications (Telegram) — disabled automatically if not configured in .env.
+  const notifier = createNotifier({ log: (m) => log.info(m) });
+  if (notifier.enabled) log.info('Notifier: Telegram enabled.');
 
   const results: { combo: string; ok: boolean; note: string }[] = [];
 
@@ -58,7 +80,7 @@ export async function runVisaFormFlow(
         }
       }
 
-      await fillAndSubmitCombo(page, config, combo, log);
+      await fillAndSubmitCombo(page, config, combo, log, notifier);
 
       // If this combo landed us on the bot page, recover (back → captcha → form)
       // and re-submit the SAME combo, up to botRecoveryAttempts.
@@ -71,14 +93,17 @@ export async function runVisaFormFlow(
           log.warn('Recovery failed: could not re-open the visa form.');
           break;
         }
-        await fillAndSubmitCombo(page, config, combo, log);
+        await fillAndSubmitCombo(page, config, combo, log, notifier);
       }
 
-      const note = isBotPage(page) ? 'ended on /account/bot' : 'submitted';
-      results.push({ combo: comboLabel(combo), ok: !isBotPage(page), note });
+      const blocked = isBotPage(page);
+      if (blocked) await notifier.notify('bot-blocked', comboVars(combo));
+      const note = blocked ? 'ended on /account/bot' : 'submitted';
+      results.push({ combo: comboLabel(combo), ok: !blocked, note });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       log.warn(`Combo ${i + 1}/${combos.length} (${comboLabel(combo)}) failed: ${msg}.`);
+      await notifier.notify('error', { ...comboVars(combo), message: msg });
       results.push({ combo: comboLabel(combo), ok: false, note: msg });
       if (!form.continueOnComboFailure) {
         log.warn('Stopping (continueOnComboFailure=false).');
@@ -147,6 +172,7 @@ async function fillAndSubmitCombo(
   config: LoginBotConfig,
   combo: VisaCombo,
   log: Logger,
+  notifier: Notifier,
 ): Promise<void> {
   const form = config.visaForm;
 
@@ -191,7 +217,17 @@ async function fillAndSubmitCombo(
 
     // Submit often returns a result MODAL (e.g. "No Appointments Available")
     // instead of navigating. Capture+log it before waiting for any URL change.
-    await logResultModal(page, combo, log);
+    const modal = await logResultModal(page, combo, log);
+
+    // SLOT FOUND → notify. Conservative: anything that isn't a known "no slots"
+    // message counts as a potential hit (better to over-notify than miss one).
+    if (isSlotAvailable(modal)) {
+      log.step('🟢 Possible SLOT AVAILABLE — sending notification.');
+      await notifier.notify('slot-available', {
+        ...comboVars(combo),
+        message: modal ? `${modal.title} — ${modal.message}` : 'Form submitted; no "no slots" message.',
+      });
+    }
 
     await page
       .waitForFunction(
@@ -229,14 +265,18 @@ async function isVisaFormPage(page: Page): Promise<boolean> {
  * e.g. "No Appointments Available". Wait briefly for it, LOG which COMBINATION
  * produced it plus its title + message (clear 3-line block), then dismiss it.
  */
-async function logResultModal(page: Page, combo: VisaCombo, log: Logger): Promise<void> {
+async function logResultModal(
+  page: Page,
+  combo: VisaCombo,
+  log: Logger,
+): Promise<{ title: string; message: string } | null> {
   const modal = page.locator('.modal.show, [role="dialog"]:visible, .modal:visible').first();
   // Give the AJAX response a moment to render the modal; absence is fine.
   const appeared = await modal
     .waitFor({ state: 'visible', timeout: 5000 })
     .then(() => true)
     .catch(() => false);
-  if (!appeared) return;
+  if (!appeared) return null;
 
   const title = (await modal.locator('.modal-title, h1, h2, h3, h4').first().textContent().catch(() => '')) ?? '';
   const body = (await modal.locator('.modal-body, p').first().textContent().catch(() => '')) ?? '';
@@ -256,6 +296,22 @@ async function logResultModal(page: Page, combo: VisaCombo, log: Logger): Promis
     await close.click({ force: true }).catch(() => {});
   }
   await humanPause(300, 700);
+  return { title: t, message: msg };
+}
+
+/**
+ * Decide whether a result modal means slots ARE available. We treat the known
+ * "no slots" message as negative and anything else as a potential hit. This is
+ * conservative on purpose: better to over-notify than miss a real slot.
+ */
+function isSlotAvailable(modal: { title: string; message: string } | null): boolean {
+  if (!modal) return false; // no modal usually means it navigated onward, not a slot result
+  const text = `${modal.title} ${modal.message}`.toLowerCase();
+  const noSlot =
+    /no\s+appointments?\s+available/.test(text) ||
+    /no\s+slots?\s+(are\s+)?available/.test(text) ||
+    /currently,?\s+no\s+slots/.test(text);
+  return !noSlot;
 }
 
 /** Log a modal as a clear 3-line block: COMBINATION / TITLE / MESSAGE. */

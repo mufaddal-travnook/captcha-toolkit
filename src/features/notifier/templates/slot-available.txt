@@ -1,0 +1,13 @@
+🟢 SLOT AVAILABLE — BLS Spain
+
+📍 Location: {{location}}
+📋 Visa Type: {{visaType}}
+🎫 Sub Type: {{visaSubType}}
+⏱ Category: {{appointmentCategory}}
+👤 For: {{appointmentFor}}
+
+💬 {{message}}
+🕒 Found: {{timestamp}}
+🔗 {{url}}
+
+⚡ Book now — slots go fast!

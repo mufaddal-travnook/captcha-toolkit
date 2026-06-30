@@ -8,9 +8,10 @@
  *   npm run login -- --keep-open         # leave the browser open after login
  *   npm run login -- --no-submit         # fill the form but DON'T click submit;
  *                                        # keeps the browser open so YOU submit.
- *   npm run login -- --all               # run ALL 8 visa-form combinations
+ *   npm run login -- --all               # all 8 combos in ONE session
+ *   npm run login -- --batched           # 8 combos in 4 fresh sessions (2 each)
  */
-import { runLogin, FatalError } from './features/login-bot/index.js';
+import { runLogin, runBatched, FatalError } from './features/login-bot/index.js';
 import type { SolverName } from './core/types.js';
 
 function get(argv: string[], flag: string): string | undefined {
@@ -24,6 +25,24 @@ async function main(): Promise<void> {
   const headed = !argv.includes('--headless');
   const noSubmit = argv.includes('--no-submit');
   const runAll = argv.includes('--all');
+  const batched = argv.includes('--batched');
+  const credentials = {
+    email: process.env.BLS_EMAIL ?? '',
+    password: process.env.BLS_PASSWORD ?? '',
+  };
+
+  // Batched mode: 4 fresh sessions of 2 combos each (own browser/profile/login).
+  if (batched) {
+    const results = await runBatched({
+      config: { solver, headed },
+      credentials,
+    });
+    const okCount = results.filter((r) => r.success).length;
+    console.log(`Batched run complete: ${okCount}/${results.length} batches succeeded.`);
+    process.exit(okCount > 0 ? 0 : 2);
+    return;
+  }
+
   // --no-submit implies keeping the browser open so the user can submit.
   const keepOpen = argv.includes('--keep-open') || noSubmit;
 
@@ -45,10 +64,7 @@ async function main(): Promise<void> {
       },
     },
     userDataDir,
-    credentials: {
-      email: process.env.BLS_EMAIL ?? '',
-      password: process.env.BLS_PASSWORD ?? '',
-    },
+    credentials,
   });
 
   console.log(result.message);
