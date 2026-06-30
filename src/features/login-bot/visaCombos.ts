@@ -15,6 +15,14 @@ export interface VisaCombo {
   appointmentFor: 'Individual' | 'Family';
 }
 
+/** Outcome of processing one combo (for run summaries). */
+export interface ComboResult {
+  combo: string; // human label
+  ok: boolean; // submitted without ending on /account/bot or erroring
+  note: string; // "submitted" | "no slots" | "ended on /account/bot" | error text
+  slot?: boolean; // a slot looked available
+}
+
 /** The single combo used when runAll = false. Edit freely. */
 export const SINGLE_COMBO: VisaCombo = {
   location: 'Abu Dhabi',

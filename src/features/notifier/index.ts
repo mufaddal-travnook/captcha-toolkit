@@ -64,6 +64,22 @@ export function createNotifier(opts: NotifierOptions = {}): Notifier {
   };
 }
 
+/**
+ * Notifier for the SECOND (summary) bot — run summaries go here, separate from
+ * the slot/alert bot. Credentials from .env:
+ *   TELEGRAM_SUMMARY_BOT_TOKEN, TELEGRAM_SUMMARY_CHAT_ID
+ * Falls back to disabled (no-op) if unset.
+ */
+export function createSummaryNotifier(opts: Omit<NotifierOptions, 'telegram'> = {}): Notifier {
+  return createNotifier({
+    ...opts,
+    telegram: {
+      botToken: process.env.TELEGRAM_SUMMARY_BOT_TOKEN ?? '',
+      chatId: process.env.TELEGRAM_SUMMARY_CHAT_ID ?? '',
+    },
+  });
+}
+
 /** Fill common variables (timestamp) if the caller didn't provide them. */
 function withDefaults(vars: TemplateVars): TemplateVars {
   return { timestamp: vars.timestamp ?? new Date().toISOString(), ...vars };

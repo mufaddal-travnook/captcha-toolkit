@@ -11,7 +11,7 @@ import { runDashboardStep } from './DashboardFlow.js';
 import { FatalError } from './errors.js';
 import { createLogger, type Logger } from './logger.js';
 import { humanPause } from './human.js';
-import type { VisaCombo } from './visaCombos.js';
+import type { VisaCombo, ComboResult } from './visaCombos.js';
 import { createShooter, type Shooter } from './screenshot.js';
 
 export interface Credentials {
@@ -24,6 +24,8 @@ export interface LoginResult {
   target?: string;
   matches?: number[];
   message: string;
+  /** Per-combo outcomes from the visa-form step (for run summaries). */
+  comboResults?: ComboResult[];
 }
 
 export async function runLoginFlow(
@@ -100,8 +102,9 @@ export async function runLoginFlow(
 
   // Dashboard step: click "Verify Selection", solve the second captcha, then
   // fill + submit the visa form.
+  let comboResults: ComboResult[] = [];
   if (config.dashboard.enabled) {
-    await runDashboardStep(page, config, log, combosOverride, shooter);
+    comboResults = await runDashboardStep(page, config, log, combosOverride, shooter);
   }
 
   log.step('Automation complete.');
@@ -110,5 +113,6 @@ export async function runLoginFlow(
     target: captcha.target,
     matches: captcha.matches,
     message: `Completed full flow (login captcha ${captcha.target}). Final page: ${page.url()}`,
+    comboResults,
   };
 }

@@ -12,6 +12,7 @@ import { createLogger } from './logger.js';
 import { DEFAULT_CONFIG, type LoginBotConfig } from './config.js';
 import { ALL_COMBOS, comboLabel, type VisaCombo } from './visaCombos.js';
 import { createShooter } from './screenshot.js';
+import { createSummaryNotifier } from '../notifier/index.js';
 
 /** Recursively-optional config, so callers can override just nested fields.
  *  Arrays and primitives are kept whole (not recursed into). */
@@ -149,7 +150,56 @@ export async function runBatched(opts: RunBatchedOptions): Promise<LoginResult[]
   }
 
   log.step('════ BATCHED RUN COMPLETE ════');
+
+  // Final run summary → the SECOND (summary) Telegram bot. Disabled/no-op if its
+  // creds aren't set. Lists every batch + every combo outcome.
+  await sendRunSummary(results, batches, log);
+
   return results;
+}
+
+/** Send one consolidated run summary to the summary bot at the very end. */
+async function sendRunSummary(
+  results: LoginResult[],
+  batches: VisaCombo[][],
+  log: { info: (m: string) => void },
+): Promise<void> {
+  const summary = createSummaryNotifier({ log: (m) => log.info(m) });
+  if (!summary.enabled) return;
+
+  const lines: string[] = [];
+  let okCombos = 0;
+  let totalCombos = 0;
+  let slots = 0;
+
+  results.forEach((res, i) => {
+    const label = (batches[i] ?? []).map(comboLabel).join(' | ') || `batch ${i + 1}`;
+    if (!res.success && (!res.comboResults || res.comboResults.length === 0)) {
+      // Batch failed before producing combo results (e.g. 403 at login).
+      lines.push(`✗ Batch ${i + 1}: ${res.message}`);
+      return;
+    }
+    for (const c of res.comboResults ?? []) {
+      totalCombos++;
+      if (c.ok) okCombos++;
+      if (c.slot) slots++;
+      const icon = c.slot ? '🟢' : c.ok ? '✓' : '✗';
+      lines.push(`${icon} ${c.combo} — ${c.note}`);
+    }
+    void label;
+  });
+
+  const overall =
+    slots > 0
+      ? `🟢 ${slots} possible SLOT(S) found!`
+      : totalCombos > 0
+        ? `${okCombos}/${totalCombos} combos submitted OK across ${results.length} batches.`
+        : `Run finished — no combos completed (${results.length} batches).`;
+
+  await summary.notify('batch-summary', {
+    summaryLine: overall,
+    comboLines: lines.join('\n'),
+  });
 }
 
 /** Resolve only when the browser/page is closed (by the user). */

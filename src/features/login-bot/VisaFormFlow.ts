@@ -15,7 +15,7 @@ import { visibleKendoField, selectKendoOption } from './kendo.js';
 import { humanClick } from './safeClick.js';
 import { createLogger, type Logger } from './logger.js';
 import { humanPause, sleep } from './human.js';
-import { ALL_COMBOS, SINGLE_COMBO, comboLabel, type VisaCombo } from './visaCombos.js';
+import { ALL_COMBOS, SINGLE_COMBO, comboLabel, type VisaCombo, type ComboResult } from './visaCombos.js';
 import { runDashboardCaptcha } from './DashboardFlow.js';
 import { createNotifier, type Notifier } from '../notifier/index.js';
 import { createShooter, type Shooter } from './screenshot.js';
@@ -54,9 +54,9 @@ export async function runVisaFormFlow(
   log: Logger = createLogger(),
   combosOverride?: VisaCombo[],
   shooter: Shooter = createShooter({ enabled: false }),
-): Promise<void> {
+): Promise<ComboResult[]> {
   const form = config.visaForm;
-  if (!form.enabled) return;
+  if (!form.enabled) return [];
 
   // Priority: explicit override (a batch's combos) → all 8 → single combo.
   const combos = combosOverride ?? (form.runAll ? ALL_COMBOS : [SINGLE_COMBO]);
@@ -66,7 +66,7 @@ export async function runVisaFormFlow(
   const notifier = createNotifier({ log: (m) => log.info(m) });
   if (notifier.enabled) log.info('Notifier: Telegram enabled.');
 
-  const results: { combo: string; ok: boolean; note: string }[] = [];
+  const results: ComboResult[] = [];
 
   for (let i = 0; i < combos.length; i++) {
     const combo = combos[i]!;
@@ -82,7 +82,7 @@ export async function runVisaFormFlow(
         }
       }
 
-      await fillAndSubmitCombo(page, config, combo, log, notifier, shooter);
+      let outcome = await fillAndSubmitCombo(page, config, combo, log, notifier, shooter);
 
       // If this combo landed us on the bot page, recover (back → captcha → form)
       // and re-submit the SAME combo, up to botRecoveryAttempts.
@@ -95,13 +95,13 @@ export async function runVisaFormFlow(
           log.warn('Recovery failed: could not re-open the visa form.');
           break;
         }
-        await fillAndSubmitCombo(page, config, combo, log, notifier, shooter);
+        outcome = await fillAndSubmitCombo(page, config, combo, log, notifier, shooter);
       }
 
       const blocked = isBotPage(page);
       if (blocked) await notifier.notify('bot-blocked', comboVars(combo));
-      const note = blocked ? 'ended on /account/bot' : 'submitted';
-      results.push({ combo: comboLabel(combo), ok: !blocked, note });
+      const note = blocked ? 'ended on /account/bot' : outcome.note;
+      results.push({ combo: comboLabel(combo), ok: !blocked, note, slot: outcome.slot });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       log.warn(`Combo ${i + 1}/${combos.length} (${comboLabel(combo)}) failed: ${msg}.`);
@@ -123,11 +123,12 @@ export async function runVisaFormFlow(
   }
 
   // Summary so you can see, per combination, what happened.
-  if (form.runAll) {
+  if (results.length > 1) {
     log.step('───── RUN SUMMARY ─────');
     for (const r of results) log.info(`${r.ok ? '✓' : '✗'} ${r.combo} — ${r.note}`);
     log.step('───────────────────────');
   }
+  return results;
 }
 
 /**
@@ -176,7 +177,7 @@ async function fillAndSubmitCombo(
   log: Logger,
   notifier: Notifier,
   shooter: Shooter = createShooter({ enabled: false }),
-): Promise<void> {
+): Promise<{ slot: boolean; note: string }> {
   const form = config.visaForm;
 
   await page.waitForLoadState('networkidle').catch(() => {});
@@ -214,37 +215,40 @@ async function fillAndSubmitCombo(
   await shooter.shot(page, `form-filled-${comboLabel(combo)}`);
 
   // 6. Submit.
-  if (form.submit) {
-    await humanPause(600, 1400);
-    const urlBefore = page.url();
-    await humanClick(page, page.locator(config.dashboard.submitButton).first());
-    await page.waitForLoadState('networkidle').catch(() => {});
+  if (!form.submit) return { slot: false, note: 'filled (not submitted)' };
 
-    // Submit often returns a result MODAL (e.g. "No Appointments Available")
-    // instead of navigating. Capture+log it before waiting for any URL change.
-    const modal = await logResultModal(page, combo, log);
-    await shooter.shot(page, `result-${comboLabel(combo)}`);
+  await humanPause(600, 1400);
+  const urlBefore = page.url();
+  await humanClick(page, page.locator(config.dashboard.submitButton).first());
+  await page.waitForLoadState('networkidle').catch(() => {});
 
-    // SLOT FOUND → notify. Conservative: anything that isn't a known "no slots"
-    // message counts as a potential hit (better to over-notify than miss one).
-    if (isSlotAvailable(modal)) {
-      log.step('🟢 Possible SLOT AVAILABLE — sending notification.');
-      await notifier.notify('slot-available', {
-        ...comboVars(combo),
-        message: modal ? `${modal.title} — ${modal.message}` : 'Form submitted; no "no slots" message.',
-      });
-    }
+  // Submit often returns a result MODAL (e.g. "No Appointments Available")
+  // instead of navigating. Capture+log it before waiting for any URL change.
+  const modal = await logResultModal(page, combo, log);
+  await shooter.shot(page, `result-${comboLabel(combo)}`);
 
-    await page
-      .waitForFunction(
-        // @ts-expect-error browser global at runtime
-        (prev: string) => location.href !== prev,
-        urlBefore,
-        { timeout: 15_000 },
-      )
-      .catch(() => {});
-    await logPageOutcome(page, log);
+  const slot = isSlotAvailable(modal);
+  if (slot) {
+    log.step('🟢 Possible SLOT AVAILABLE — sending notification.');
+    await notifier.notify('slot-available', {
+      ...comboVars(combo),
+      message: modal ? `${modal.title} — ${modal.message}` : 'Form submitted; no "no slots" message.',
+    });
   }
+
+  await page
+    .waitForFunction(
+      // @ts-expect-error browser global at runtime
+      (prev: string) => location.href !== prev,
+      urlBefore,
+      { timeout: 15_000 },
+    )
+    .catch(() => {});
+  await logPageOutcome(page, log);
+
+  // Note for the summary: slot / no-slots / generic submitted.
+  const note = slot ? 'SLOT AVAILABLE' : modal ? 'no slots' : 'submitted';
+  return { slot, note };
 }
 
 /**

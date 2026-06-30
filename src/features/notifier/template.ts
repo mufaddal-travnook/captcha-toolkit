@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 const TEMPLATE_DIR = join(dirname(fileURLToPath(import.meta.url)), 'templates');
 
 /** Which built-in template to render. */
-export type TemplateName = 'slot-available' | 'bot-blocked' | 'error';
+export type TemplateName = 'slot-available' | 'bot-blocked' | 'error' | 'batch-summary';
 
 /** Values substituted into {{placeholders}}. Anything missing → "". */
 export type TemplateVars = Record<string, string | undefined>;

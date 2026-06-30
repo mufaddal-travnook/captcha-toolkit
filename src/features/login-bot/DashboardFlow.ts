@@ -12,7 +12,7 @@ import { runVisaFormFlow } from './VisaFormFlow.js';
 import { safeClick } from './safeClick.js';
 import { createLogger, type Logger } from './logger.js';
 import { humanPause } from './human.js';
-import type { VisaCombo } from './visaCombos.js';
+import type { VisaCombo, ComboResult } from './visaCombos.js';
 import { createShooter, type Shooter } from './screenshot.js';
 
 /**
@@ -73,11 +73,11 @@ export async function runDashboardStep(
   log: Logger = createLogger(),
   combosOverride?: VisaCombo[],
   shooter: Shooter = createShooter({ enabled: false }),
-): Promise<void> {
+): Promise<ComboResult[]> {
   await shooter.shot(page, 'dashboard-loaded');
   // Verify Selection → captcha → Submit → visa form opens.
   await runDashboardCaptcha(page, config, log);
   await shooter.shot(page, 'visa-form-opened');
   // The new page is the visa-type form — fill it (optionally a combo subset).
-  await runVisaFormFlow(page, config, log, combosOverride, shooter);
+  return runVisaFormFlow(page, config, log, combosOverride, shooter);
 }
