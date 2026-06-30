@@ -29,16 +29,22 @@ export interface LaunchOptions {
   timeoutMs: number;
   /** Profile directory for the persistent context. Defaults to a temp profile. */
   userDataDir?: string;
+  /** Route all traffic through this proxy, e.g. "socks5://localhost:1080". */
+  proxyServer?: string;
 }
 
 export async function launchBrowser(opts: LaunchOptions): Promise<LaunchedBrowser> {
   const userDataDir = opts.userDataDir ?? join(tmpdir(), 'bls-login-bot-profile');
+
+  // Proxy (optional) — e.g. an SSH SOCKS tunnel that egresses via your home IP.
+  const proxy = opts.proxyServer ? { server: opts.proxyServer } : undefined;
 
   // launchPersistentContext returns the CONTEXT directly (no separate browser).
   const context = (await chromium.launchPersistentContext(userDataDir, {
     headless: !opts.headed,
     viewport: null, // use the real window size
     locale: 'en-US',
+    ...(proxy ? { proxy } : {}),
     args: ['--disable-blink-features=AutomationControlled', '--start-maximized'],
   })) as unknown as BrowserContext;
 

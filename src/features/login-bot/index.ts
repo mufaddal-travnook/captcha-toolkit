@@ -58,7 +58,9 @@ export async function runLogin(opts: RunLoginOptions): Promise<LoginResult> {
     headed: config.headed,
     timeoutMs: config.timeoutMs,
     userDataDir: opts.userDataDir,
+    proxyServer: config.proxyServer || undefined,
   });
+  if (config.proxyServer) log.info(`Using proxy: ${config.proxyServer}`);
 
   const shooter = createShooter({
     enabled: config.screenshots,

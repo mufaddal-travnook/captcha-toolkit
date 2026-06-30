@@ -22,6 +22,12 @@ export interface LoginBotConfig {
   backoffMs: number;
   /** Per-action timeout (ms). */
   timeoutMs: number;
+  /**
+   * Optional proxy for ALL browser traffic — e.g. route an EC2 box out through
+   * your home IP via an SSH SOCKS tunnel: "socks5://localhost:1080".
+   * Empty string = no proxy (direct). Can also be set via PROXY_URL in .env.
+   */
+  proxyServer: string;
   selectors: Selectors;
   /** Captcha solve retry tuning. */
   captcha: CaptchaConfig;
@@ -112,6 +118,7 @@ export const DEFAULT_CONFIG: LoginBotConfig = {
   retries: 3,
   backoffMs: 1500,
   timeoutMs: 30_000,
+  proxyServer: process.env.PROXY_URL ?? '', // e.g. socks5://localhost:1080
   selectors: {
     emailCandidates: idRange('UserId', 10),
     passwordCandidates: idRange('Password', 10),

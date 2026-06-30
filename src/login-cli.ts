@@ -11,6 +11,7 @@
  *   npm run login -- --all               # all 8 combos in ONE session
  *   npm run login -- --batched           # 8 combos in 4 fresh sessions (2 each)
  *   npm run login -- --no-screenshots    # screenshots are ON by default; disable
+ *   npm run login -- --proxy socks5://localhost:1080   # route via a proxy/tunnel
  */
 import { runLogin, runBatched, FatalError } from './features/login-bot/index.js';
 import type { SolverName } from './core/types.js';
@@ -29,6 +30,8 @@ async function main(): Promise<void> {
   const batched = argv.includes('--batched');
   // Screenshots are ON by default; pass --no-screenshots to turn them off.
   const screenshots = !argv.includes('--no-screenshots');
+  // Proxy: --proxy <url> overrides PROXY_URL env / config default.
+  const proxyServer = get(argv, '--proxy');
   const credentials = {
     email: process.env.BLS_EMAIL ?? '',
     password: process.env.BLS_PASSWORD ?? '',
@@ -37,7 +40,7 @@ async function main(): Promise<void> {
   // Batched mode: 4 fresh sessions of 2 combos each (own browser/profile/login).
   if (batched) {
     const results = await runBatched({
-      config: { solver, headed, screenshots },
+      config: { solver, headed, screenshots, ...(proxyServer ? { proxyServer } : {}) },
       credentials,
     });
     const okCount = results.filter((r) => r.success).length;
@@ -62,6 +65,7 @@ async function main(): Promise<void> {
       headed,
       keepOpen,
       screenshots,
+      ...(proxyServer ? { proxyServer } : {}),
       visaForm: {
         ...(noSubmit ? { submit: false } : {}),
         ...(runAll ? { runAll: true } : {}),
