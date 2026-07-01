@@ -82,7 +82,7 @@ export async function runLogin(opts: RunLoginOptions): Promise<LoginResult> {
   if (config.proxyServer) log.info(`Using proxy: ${config.proxyServer}`);
 
   const shooter = createShooter({
-    enabled: config.screenshots,
+    level: config.screenshotLevel,
     fullPage: config.screenshotsFullPage,
     log: (m) => log.warn(m), // only failures are logged
   });

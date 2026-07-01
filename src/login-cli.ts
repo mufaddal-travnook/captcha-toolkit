@@ -10,11 +10,13 @@
  *                                        # keeps the browser open so YOU submit.
  *   npm run login -- --all               # all 8 combos in ONE session
  *   npm run login -- --batched           # 8 combos in 4 fresh sessions (2 each)
- *   npm run login -- --no-screenshots    # screenshots are ON by default; disable
+ *   npm run login -- --screenshots all   # off | error | result | all (default: error)
+ *   npm run login -- --no-screenshots    # shortcut for --screenshots off
  *   npm run login -- --proxy socks5://localhost:1080   # route via a proxy/tunnel
  */
 import { runLogin, runBatched, FatalError } from './features/login-bot/index.js';
 import type { SolverName } from './core/types.js';
+import type { ScreenshotLevel } from './features/login-bot/screenshot.js';
 
 function get(argv: string[], flag: string): string | undefined {
   const i = argv.indexOf(flag);
@@ -28,8 +30,11 @@ async function main(): Promise<void> {
   const noSubmit = argv.includes('--no-submit');
   const runAll = argv.includes('--all');
   const batched = argv.includes('--batched');
-  // Screenshots are ON by default; pass --no-screenshots to turn them off.
-  const screenshots = !argv.includes('--no-screenshots');
+  // Screenshot level: --screenshots <off|error|result|all>. Defaults to config
+  // (SCREENSHOT_LEVEL env or 'error'). --no-screenshots is a shortcut for 'off'.
+  const screenshotLevel = (
+    argv.includes('--no-screenshots') ? 'off' : get(argv, '--screenshots')
+  ) as ScreenshotLevel | undefined;
   // Proxy: --proxy <url> overrides PROXY_URL env / config default.
   const proxyServer = get(argv, '--proxy');
   const credentials = {
@@ -40,7 +45,12 @@ async function main(): Promise<void> {
   // Batched mode: 4 fresh sessions of 2 combos each (own browser/profile/login).
   if (batched) {
     const results = await runBatched({
-      config: { solver, headed, screenshots, ...(proxyServer ? { proxyServer } : {}) },
+      config: {
+        solver,
+        headed,
+        ...(screenshotLevel ? { screenshotLevel } : {}),
+        ...(proxyServer ? { proxyServer } : {}),
+      },
       credentials,
     });
     const okCount = results.filter((r) => r.success).length;
@@ -64,7 +74,7 @@ async function main(): Promise<void> {
       solver,
       headed,
       keepOpen,
-      screenshots,
+      ...(screenshotLevel ? { screenshotLevel } : {}),
       ...(proxyServer ? { proxyServer } : {}),
       visaForm: {
         ...(noSubmit ? { submit: false } : {}),

@@ -46,12 +46,12 @@ export async function runLoginFlow(
   } catch (err) {
     // Navigation itself failed (some blocks abort the request). Still screenshot
     // whatever the page shows so you can see the block page.
-    await shooter.shot(page, 'navigation-failed');
+    await shooter.shot(page, 'navigation-failed', 'error');
     throw new FatalError(`Navigation failed: ${err instanceof Error ? err.message : err}`);
   }
   await shooter.shot(page, 'login-page-loaded');
   if (resp && (resp.status() === 403 || resp.status() === 203)) {
-    await shooter.shot(page, `blocked-http-${resp.status()}`);
+    await shooter.shot(page, `blocked-http-${resp.status()}`, 'error');
     throw new FatalError(`Access blocked (HTTP ${resp.status()}). Likely geo/bot block.`);
   }
 
@@ -113,6 +113,7 @@ export async function runLoginFlow(
     const detail = err ? ` Page says: "${err.replace(/\s+/g, ' ').trim().slice(0, 200)}"` : '';
     const message = `Login did not redirect (still at ${page.url()}).${detail}`;
     log.warn(message);
+    await shooter.shot(page, 'login-did-not-redirect', 'error');
     void urlBeforeLogin;
     return { success: false, target: captcha.target, matches: captcha.matches, message };
   }

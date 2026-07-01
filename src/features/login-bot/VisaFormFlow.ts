@@ -102,12 +102,17 @@ export async function runVisaFormFlow(
       }
 
       const blocked = isBotPage(page);
-      if (blocked) await errNotifier.notify('bot-blocked', comboVars(combo));
+      if (blocked) {
+        await shooter.shot(page, `blocked-bot-page-${comboLabel(combo)}`, 'error');
+        await errNotifier.notify('bot-blocked', comboVars(combo));
+      }
       const note = blocked ? 'ended on /account/bot' : outcome.note;
       results.push({ combo: comboLabel(combo), ok: !blocked, note, slot: outcome.slot });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       log.warn(`Combo ${i + 1}/${combos.length} (${comboLabel(combo)}) failed: ${msg}.`);
+      // Always capture the page at the moment of failure, regardless of level.
+      await shooter.shot(page, `error-${comboLabel(combo)}`, 'error');
       await errNotifier.notify('error', { ...comboVars(combo), message: msg });
       results.push({ combo: comboLabel(combo), ok: false, note: msg });
       if (!form.continueOnComboFailure) {
@@ -215,7 +220,7 @@ async function fillAndSubmitCombo(
   // 5. Appointment For (radio: Individual / Family).
   await pickAppointmentFor(page, combo.appointmentFor, log);
 
-  await shooter.shot(page, `form-filled-${comboLabel(combo)}`);
+  await shooter.shot(page, `form-filled-${comboLabel(combo)}`, 'step');
 
   // 6. Submit.
   if (!form.submit) return { slot: false, note: 'filled (not submitted)' };
@@ -227,8 +232,9 @@ async function fillAndSubmitCombo(
 
   // Submit often returns a result MODAL (e.g. "No Appointments Available")
   // instead of navigating. Capture+log it before waiting for any URL change.
-  const modal = await logResultModal(page, combo, log);
-  await shooter.shot(page, `result-${comboLabel(combo)}`);
+  // The result screenshot is taken INSIDE logResultModal — while the modal is
+  // still on screen (before it's dismissed) — so it isn't a blank/spinner frame.
+  const modal = await logResultModal(page, combo, log, shooter);
 
   const slot = isSlotAvailable(modal);
   if (slot) {
@@ -283,14 +289,29 @@ async function logResultModal(
   page: Page,
   combo: VisaCombo,
   log: Logger,
+  shooter: Shooter = createShooter({ enabled: false }),
 ): Promise<{ title: string; message: string } | null> {
   const modal = page.locator('.modal.show, [role="dialog"]:visible, .modal:visible').first();
   // Give the AJAX response a moment to render the modal; absence is fine.
   const appeared = await modal
-    .waitFor({ state: 'visible', timeout: 5000 })
+    .waitFor({ state: 'visible', timeout: 8000 })
     .then(() => true)
     .catch(() => false);
-  if (!appeared) return null;
+  if (!appeared) {
+    // No modal — could be a navigation or an unexpected page. Capture it at
+    // 'result' level so a "submitted (no result modal)" note has evidence.
+    await shooter.shot(page, `result-nomodal-${comboLabel(combo)}`, 'result');
+    return null;
+  }
+
+  // Wait for the modal to actually have text (not just the loading spinner),
+  // THEN screenshot it while it's still on screen — before we dismiss it below.
+  await modal
+    .locator('.modal-title, .modal-body, h1, h2, h3, h4')
+    .first()
+    .waitFor({ state: 'visible', timeout: 5000 })
+    .catch(() => {});
+  await humanPause(300, 700); // let the fade-in/content settle
 
   const title = (await modal.locator('.modal-title, h1, h2, h3, h4').first().textContent().catch(() => '')) ?? '';
   const body = (await modal.locator('.modal-body, p').first().textContent().catch(() => '')) ?? '';
@@ -299,6 +320,10 @@ async function logResultModal(
   const t = title.replace(/\s+/g, ' ').trim();
   const msg = (body || full).replace(/\s+/g, ' ').trim();
   logModalBlock(log, comboLabel(combo), t, msg);
+
+  // Label the shot by outcome so slots stand out in the folder at a glance.
+  const outcome = isSlotAvailable({ title: t, message: msg }) ? 'SLOT' : 'noslots';
+  await shooter.shot(page, `result-${outcome}-${comboLabel(combo)}`, 'result');
 
   // Dismiss it (Ok button, then any close control) so subsequent steps proceed.
   const ok = modal.locator('button, .btn', { hasText: /^\s*ok\s*$/i }).first();

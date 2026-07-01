@@ -1,26 +1,45 @@
 /**
- * Debug screenshots — capture the page at major steps so failures can be
- * diagnosed after the fact (especially on a headless/xvfb server you can't see).
+ * Debug screenshots — capture the page so failures can be diagnosed after the
+ * fact (especially on a headless/xvfb server you can't see).
  *
- * Config-gated: when disabled, `shot()` is a cheap no-op. All files are written
- * FLAT into ./screenshots (no subfolders). Each filename is timestamped so runs
- * don't collide and they sort chronologically, e.g.
- *   screenshots/143012-001-login-page-loaded.png
+ * Each shot has a SEVERITY, and the shooter has a LEVEL. A shot is written only
+ * if its severity is important enough for the current level:
+ *
+ *   level 'error'  → only 'error' shots            (quiet: failures + blocks)
+ *   level 'result' → 'error' + 'result' shots      (outcomes + failures)
+ *   level 'all'    → every shot                     (full step-by-step debug)
+ *   level 'off'    → nothing
+ *
+ * Files are written FLAT into ./screenshots (no subfolders). Filenames are
+ * timestamped so runs sort chronologically, e.g.
+ *   screenshots/143012-001-result-abu-dhabi-....png
  */
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Page } from 'playwright';
 
+/** How important a given screenshot is. */
+export type ShotSeverity = 'error' | 'result' | 'step';
+/** How much the run wants captured. */
+export type ScreenshotLevel = 'off' | 'error' | 'result' | 'all';
+
 export interface Shooter {
   readonly enabled: boolean;
-  /** Capture the current page, tagged with `label`. Never throws. */
-  shot: (page: Page, label: string) => Promise<void>;
+  readonly level: ScreenshotLevel;
+  /**
+   * Capture the current page, tagged with `label`. `severity` defaults to
+   * 'step' (routine). Skipped silently if the level doesn't want it. Never throws.
+   */
+  shot: (page: Page, label: string, severity?: ShotSeverity) => Promise<void>;
   /** Directory screenshots are written to. */
   readonly dir: string;
 }
 
 export interface ShooterOptions {
-  enabled: boolean;
+  /** How much to capture. Back-compat: `enabled` maps to 'all'/'off' if level unset. */
+  level?: ScreenshotLevel;
+  /** Deprecated boolean form; ignored if `level` is given. */
+  enabled?: boolean;
   /** Directory for screenshots (flat, no subfolders). Defaults to ./screenshots. */
   baseDir?: string;
   /** Full-page screenshot (vs just the viewport). */
@@ -29,15 +48,25 @@ export interface ShooterOptions {
   log?: (msg: string) => void;
 }
 
-/** Build a screenshot helper. Disabled → all calls no-op. */
+/** Severities allowed to write at each level. */
+const ALLOWED: Record<ScreenshotLevel, Set<ShotSeverity>> = {
+  off: new Set(),
+  error: new Set(['error']),
+  result: new Set(['error', 'result']),
+  all: new Set(['error', 'result', 'step']),
+};
+
+/** Build a screenshot helper. Level 'off' → all calls no-op. */
 export function createShooter(opts: ShooterOptions): Shooter {
+  const level: ScreenshotLevel = opts.level ?? (opts.enabled === false ? 'off' : 'all');
   const dir = opts.baseDir ?? 'screenshots';
   const log = opts.log ?? (() => {});
+  const allowed = ALLOWED[level];
   let seq = 0;
   let dirReady: Promise<void> | null = null;
 
-  const shot = async (page: Page, label: string): Promise<void> => {
-    if (!opts.enabled) return;
+  const shot = async (page: Page, label: string, severity: ShotSeverity = 'step'): Promise<void> => {
+    if (!allowed.has(severity)) return;
     try {
       if (!dirReady) dirReady = mkdir(dir, { recursive: true }).then(() => {});
       await dirReady;
@@ -49,7 +78,7 @@ export function createShooter(opts: ShooterOptions): Shooter {
     }
   };
 
-  return { enabled: opts.enabled, shot, dir };
+  return { enabled: level !== 'off', level, shot, dir };
 }
 
 /** HHMMSS for the filename prefix. */

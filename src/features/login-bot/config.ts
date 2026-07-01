@@ -3,6 +3,7 @@
  * Credentials come from .env; this file holds URL, selectors, and behavior.
  */
 import type { SolverName } from '../../core/types.js';
+import type { ScreenshotLevel } from './screenshot.js';
 
 export interface LoginBotConfig {
   /** Login page URL. */
@@ -11,9 +12,15 @@ export interface LoginBotConfig {
   headed: boolean;
   /** Keep the browser open after the run instead of closing it. */
   keepOpen: boolean;
-  /** Save debug screenshots at major steps (to ./screenshots/<run>/). */
-  screenshots: boolean;
-  /** Capture full-page screenshots (vs viewport) when screenshots are on. */
+  /**
+   * How much to screenshot (flat, into ./screenshots):
+   *   'off'    → nothing
+   *   'error'  → only failures + blocks (quiet; recommended default)
+   *   'result' → per-combo result modal + failures
+   *   'all'    → every step (full debug)
+   */
+  screenshotLevel: ScreenshotLevel;
+  /** Capture full-page screenshots (vs viewport). */
   screenshotsFullPage: boolean;
   /** Which captcha solver to use. */
   solver: SolverName;
@@ -112,7 +119,7 @@ export const DEFAULT_CONFIG: LoginBotConfig = {
   url: 'https://uae.blsspainglobal.com/Global/Account/LogIn?ReturnUrl=%2FGlobal%2Fbls%2FVisaTypeVerification',
   headed: true,
   keepOpen: true,
-  screenshots: true, // always capture step screenshots (server debugging)
+  screenshotLevel: (process.env.SCREENSHOT_LEVEL as ScreenshotLevel) || 'error', // quiet by default: failures + blocks only
   screenshotsFullPage: false,
   solver: 'openai',
   retries: 3,
