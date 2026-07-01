@@ -167,7 +167,7 @@ export const DEFAULT_CONFIG: LoginBotConfig = {
     betweenCombosMs: 6000, // breather between combos in runAll mode
     continueOnComboFailure: true,
     batchSize: 2, // batched mode: 2 combos per fresh session → 4 batches for 8 combos
-    betweenRunsMs: 45_000, // ~45s gap between batches (jittered)
+    betweenRunsMs: 20_000, // ~45s gap between batches (jittered)
     resultModalTimeoutMs: 20_000, // wait up to 20s for the result modal (slow proxy)
   },
 };
