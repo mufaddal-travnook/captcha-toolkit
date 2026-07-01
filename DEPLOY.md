@@ -83,14 +83,21 @@ Logs land in `logs/run-<timestamp>.log` (latest 50 kept).
 ```bash
 crontab -e
 ```
-Add (every 30 minutes):
+Add (at :29 and :59 of every hour, 8am–11pm — last run fires 23:59):
 ```cron
-*/30 * * * * /home/ubuntu/bls-bot/scripts/run.sh --batched
+29,59 8-23 * * * /home/ubuntu/bls-bot/scripts/run.sh --batched
 ```
+- `8-23` = 8am through 11pm. With `29,59` the final tick is **23:59**.
 - `scripts/run.sh` loads `.env`, runs under `xvfb-run`, and uses a `flock` lock
   so a slow run never overlaps the next tick (it just skips).
-- Adjust the interval to taste. Every run = full logins + captchas + OpenAI
-  calls, so don't set it too aggressive.
+- Each run = 4 full logins + dashboard captchas + 8 form captchas (OpenAI
+  calls). That's ~32 runs/day — budget OpenAI cost accordingly.
+- **Set `CRON_TZ`** if the server clock isn't your timezone. Check with `date`.
+  To pin the schedule to a timezone, add a line above the job:
+  ```cron
+  CRON_TZ=Asia/Dubai
+  29,59 8-23 * * * /home/ubuntu/bls-bot/scripts/run.sh --batched
+  ```
 
 Check it's working:
 ```bash

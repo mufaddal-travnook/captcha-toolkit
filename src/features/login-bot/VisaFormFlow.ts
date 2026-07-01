@@ -17,7 +17,7 @@ import { createLogger, type Logger } from './logger.js';
 import { humanPause, sleep } from './human.js';
 import { ALL_COMBOS, SINGLE_COMBO, comboLabel, type VisaCombo, type ComboResult } from './visaCombos.js';
 import { runDashboardCaptcha } from './DashboardFlow.js';
-import { createNotifier, type Notifier } from '../notifier/index.js';
+import { createNotifier, createSummaryNotifier, type Notifier } from '../notifier/index.js';
 import { createShooter, type Shooter } from './screenshot.js';
 
 const APPT_URL = 'https://uae.blsspainglobal.com/Global/bls/visatype';
@@ -63,7 +63,10 @@ export async function runVisaFormFlow(
   if (combos.length > 1) log.step(`Visa form: running ${combos.length} combinations.`);
 
   // Notifications (Telegram) — disabled automatically if not configured in .env.
+  //  - notifier: MAIN bot → slot-available alerts only.
+  //  - errNotifier: SUMMARY bot → errors + bot-blocks (kept off the slot channel).
   const notifier = createNotifier({ log: (m) => log.info(m) });
+  const errNotifier = createSummaryNotifier({ log: (m) => log.info(m) });
   if (notifier.enabled) log.info('Notifier: Telegram enabled.');
 
   const results: ComboResult[] = [];
@@ -99,13 +102,13 @@ export async function runVisaFormFlow(
       }
 
       const blocked = isBotPage(page);
-      if (blocked) await notifier.notify('bot-blocked', comboVars(combo));
+      if (blocked) await errNotifier.notify('bot-blocked', comboVars(combo));
       const note = blocked ? 'ended on /account/bot' : outcome.note;
       results.push({ combo: comboLabel(combo), ok: !blocked, note, slot: outcome.slot });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       log.warn(`Combo ${i + 1}/${combos.length} (${comboLabel(combo)}) failed: ${msg}.`);
-      await notifier.notify('error', { ...comboVars(combo), message: msg });
+      await errNotifier.notify('error', { ...comboVars(combo), message: msg });
       results.push({ combo: comboLabel(combo), ok: false, note: msg });
       if (!form.continueOnComboFailure) {
         log.warn('Stopping (continueOnComboFailure=false).');
@@ -246,8 +249,9 @@ async function fillAndSubmitCombo(
     .catch(() => {});
   await logPageOutcome(page, log);
 
-  // Note for the summary: slot / no-slots / generic submitted.
-  const note = slot ? 'SLOT AVAILABLE' : modal ? 'no slots' : 'submitted';
+  // Note for the summary. When the portal returns NO recognizable modal we can't
+  // tell slot-vs-no-slot, so say so plainly rather than a bare "submitted".
+  const note = slot ? 'SLOT AVAILABLE' : modal ? 'no slots' : 'submitted (no result modal)';
   return { slot, note };
 }
 

@@ -82,7 +82,22 @@ export function createSummaryNotifier(opts: Omit<NotifierOptions, 'telegram'> = 
 
 /** Fill common variables (timestamp) if the caller didn't provide them. */
 function withDefaults(vars: TemplateVars): TemplateVars {
-  return { timestamp: vars.timestamp ?? new Date().toISOString(), ...vars };
+  return { timestamp: vars.timestamp ?? humanTime(), ...vars };
+}
+
+/** Readable local timestamp, e.g. "01 Jul 2026, 11:01:47" — not raw ISO. */
+function humanTime(date = new Date()): string {
+  const d = date.toLocaleString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+  // en-GB gives "01 Jul 2026, 11:01:47" — already clean; return as-is.
+  return d;
 }
 
 export type { TemplateName, TemplateVars } from './template.js';
