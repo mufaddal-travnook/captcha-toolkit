@@ -234,7 +234,7 @@ async function fillAndSubmitCombo(
   // instead of navigating. Capture+log it before waiting for any URL change.
   // The result screenshot is taken INSIDE logResultModal — while the modal is
   // still on screen (before it's dismissed) — so it isn't a blank/spinner frame.
-  const modal = await logResultModal(page, combo, log, shooter);
+  const modal = await logResultModal(page, combo, log, shooter, form.resultModalTimeoutMs);
 
   const slot = isSlotAvailable(modal);
   if (slot) {
@@ -290,13 +290,40 @@ async function logResultModal(
   combo: VisaCombo,
   log: Logger,
   shooter: Shooter = createShooter({ enabled: false }),
+  timeoutMs = 20_000,
 ): Promise<{ title: string; message: string } | null> {
-  const modal = page.locator('.modal.show, [role="dialog"]:visible, .modal:visible').first();
-  // Give the AJAX response a moment to render the modal; absence is fine.
-  const appeared = await modal
-    .waitFor({ state: 'visible', timeout: 8000 })
-    .then(() => true)
-    .catch(() => false);
+  // Broad selector: the Bootstrap-style modal AND a text/button fallback, since
+  // over a slow proxy the class list can differ mid-render. Matching the Ok
+  // button or the known heading catches the "No Appointments Available" dialog.
+  const modal = page
+    .locator(
+      [
+        '.modal.show',
+        '.modal.in',
+        '[role="dialog"]:visible',
+        '.modal:visible',
+        '.swal2-popup:visible',
+      ].join(', '),
+    )
+    .first();
+
+  // Poll until the modal has real, non-spinner content OR the timeout elapses.
+  // A single waitFor can fire on the empty spinner shell; instead we wait for
+  // the modal to contain actual text (the "No Appointments..." message).
+  const hasText = async (): Promise<boolean> => {
+    const txt = (await modal.innerText().catch(() => '')) ?? '';
+    return /\S{6,}/.test(txt); // some real text, not just a spinner
+  };
+  const deadline = Date.now() + timeoutMs;
+  let appeared = false;
+  while (Date.now() < deadline) {
+    if ((await modal.isVisible().catch(() => false)) && (await hasText())) {
+      appeared = true;
+      break;
+    }
+    await page.waitForTimeout(500);
+  }
+
   if (!appeared) {
     // No modal — could be a navigation or an unexpected page. Capture it at
     // 'result' level so a "submitted (no result modal)" note has evidence.
@@ -304,13 +331,6 @@ async function logResultModal(
     return null;
   }
 
-  // Wait for the modal to actually have text (not just the loading spinner),
-  // THEN screenshot it while it's still on screen — before we dismiss it below.
-  await modal
-    .locator('.modal-title, .modal-body, h1, h2, h3, h4')
-    .first()
-    .waitFor({ state: 'visible', timeout: 5000 })
-    .catch(() => {});
   await humanPause(300, 700); // let the fade-in/content settle
 
   const title = (await modal.locator('.modal-title, h1, h2, h3, h4').first().textContent().catch(() => '')) ?? '';

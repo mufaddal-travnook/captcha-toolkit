@@ -82,6 +82,12 @@ export interface VisaFormConfig {
   batchSize: number;
   /** Batched mode: gap between batches (ms), jittered ±25%. */
   betweenRunsMs: number;
+  /**
+   * How long to wait after Submit for the result modal ("No Appointments
+   * Available" / a slot page) to appear. Over a slow proxy the AJAX round-trip
+   * is slow, so this needs to be generous. Default 20s.
+   */
+  resultModalTimeoutMs: number;
 }
 
 export interface DashboardConfig {
@@ -162,5 +168,6 @@ export const DEFAULT_CONFIG: LoginBotConfig = {
     continueOnComboFailure: true,
     batchSize: 2, // batched mode: 2 combos per fresh session → 4 batches for 8 combos
     betweenRunsMs: 45_000, // ~45s gap between batches (jittered)
+    resultModalTimeoutMs: 20_000, // wait up to 20s for the result modal (slow proxy)
   },
 };

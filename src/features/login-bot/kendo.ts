@@ -48,11 +48,43 @@ export async function selectKendoOption(
 ): Promise<void> {
   await wrapper.scrollIntoViewIfNeeded().catch(() => {});
   await humanPause(250, 600);
-  await humanClick(page, wrapper); // move cursor to the widget, then open the popup
 
   // The popup list is `#<inputId>_listbox` (referenced by aria-owns).
   const list = page.locator(`#${inputId}_listbox`);
-  await list.waitFor({ state: 'visible', timeout: 8000 });
+
+  // Opening a Kendo dropdown can silently no-op (click landed a hair off, or —
+  // over a slow proxy — the widget wasn't fully wired when we clicked). So OPEN
+  // WITH RETRIES: click the widget, and if the popup doesn't appear, click the
+  // dropdown arrow, then fall back to the Kendo API (.open()).
+  const isOpen = async (): Promise<boolean> => list.isVisible().catch(() => false);
+  const openAttempts: Array<() => Promise<void>> = [
+    async () => humanClick(page, wrapper), // human move+click on the widget
+    async () => wrapper.locator('.k-select, .k-icon, .k-i-arrow-60-down').first().click({ force: true }).catch(() => {}),
+    async () => {
+      // Last resort: drive Kendo directly. Its widget lives on the wrapper's
+      // input; open() shows the popup without any pointer event.
+      await page.evaluate((id: string) => {
+        // @ts-expect-error window.$ / kendo present at runtime on this page
+        const w = window.jQuery ? window.jQuery(`#${id}`).data('kendoDropDownList') : null;
+        if (w && typeof w.open === 'function') w.open();
+      }, inputId).catch(() => {});
+    },
+  ];
+
+  let opened = false;
+  for (const attempt of openAttempts) {
+    await attempt();
+    // Give the popup up to 3s to appear before trying the next strategy.
+    opened = await list
+      .waitFor({ state: 'visible', timeout: 3000 })
+      .then(() => true)
+      .catch(() => false);
+    if (opened) break;
+    await humanPause(200, 500);
+  }
+  if (!opened) {
+    throw new Error(`Kendo dropdown "${inputId}" did not open (popup #${inputId}_listbox stayed hidden).`);
+  }
 
   // Prefer an EXACT (case-insensitive) match so "Dubai" doesn't hit
   // "Premium Lounge Dubai". Fall back to a contains match.
