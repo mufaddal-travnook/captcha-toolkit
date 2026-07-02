@@ -46,6 +46,7 @@ export async function runDashboardCaptcha(
       retries: config.captcha.retries,
       backoffMs: config.captcha.backoffMs,
       verifyTimeoutMs: config.captcha.verifyTimeoutMs,
+      attachTimeoutMs: config.captchaAttachTimeoutMs,
       label: 'dashboard',
     },
     log,

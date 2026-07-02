@@ -29,6 +29,12 @@ export interface LoginBotConfig {
   backoffMs: number;
   /** Per-action timeout (ms). */
   timeoutMs: number;
+  /** page.goto timeout (ms). Generous over a slow proxy. */
+  navTimeoutMs: number;
+  /** How many times to retry a failed navigation before giving up. */
+  navRetries: number;
+  /** How long to wait for captcha tiles to attach (ms). */
+  captchaAttachTimeoutMs: number;
   /**
    * Optional proxy for ALL browser traffic — e.g. route an EC2 box out through
    * your home IP via an SSH SOCKS tunnel: "socks5://localhost:1080".
@@ -131,6 +137,9 @@ export const DEFAULT_CONFIG: LoginBotConfig = {
   retries: 3,
   backoffMs: 1500,
   timeoutMs: 30_000,
+  navTimeoutMs: 60_000, // slow proxy: give navigation up to 60s
+  navRetries: 2, // retry a failed/slow navigation before failing the batch
+  captchaAttachTimeoutMs: 20_000, // slow proxy: captcha assets load slowly
   proxyServer: process.env.PROXY_URL ?? '', // e.g. socks5://localhost:1080
   selectors: {
     emailCandidates: idRange('UserId', 10),

@@ -38,16 +38,33 @@ export async function runLoginFlow(
 ): Promise<LoginResult> {
   const sel = config.selectors;
 
-  // Navigate. A geo-block / 403 here is fatal (retry won't help).
+  // Navigate. Over a slow proxy the first goto can time out even though the
+  // route is fine, so RETRY a few times with a generous timeout before giving
+  // up. A real geo-block / 403 is handled separately below (that IS fatal).
   log.step('Logging in…');
   let resp;
-  try {
-    resp = await page.goto(config.url, { waitUntil: 'domcontentloaded' });
-  } catch (err) {
-    // Navigation itself failed (some blocks abort the request). Still screenshot
-    // whatever the page shows so you can see the block page.
+  const attempts = Math.max(1, config.navRetries + 1);
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      resp = await page.goto(config.url, {
+        waitUntil: 'domcontentloaded',
+        timeout: config.navTimeoutMs,
+      });
+      lastErr = undefined;
+      break;
+    } catch (err) {
+      lastErr = err;
+      log.warn(`Navigation attempt ${attempt}/${attempts} failed: ${err instanceof Error ? err.message : err}`);
+      if (attempt < attempts) {
+        await humanPause(1500, 3000); // brief pause before retrying
+      }
+    }
+  }
+  if (lastErr) {
+    // Still failing after retries. Screenshot whatever's on screen and fail.
     await shooter.shot(page, 'navigation-failed', 'error');
-    throw new FatalError(`Navigation failed: ${err instanceof Error ? err.message : err}`);
+    throw new FatalError(`Navigation failed after ${attempts} attempts: ${lastErr instanceof Error ? lastErr.message : lastErr}`);
   }
   await shooter.shot(page, 'login-page-loaded');
   if (resp && (resp.status() === 403 || resp.status() === 203)) {
@@ -77,6 +94,7 @@ export async function runLoginFlow(
       retries: config.captcha.retries,
       backoffMs: config.captcha.backoffMs,
       verifyTimeoutMs: config.captcha.verifyTimeoutMs,
+      attachTimeoutMs: config.captchaAttachTimeoutMs,
       label: 'login',
     },
     log,

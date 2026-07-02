@@ -113,6 +113,7 @@ export async function solveCaptcha(
   solverName: SolverName,
   log: Logger = createLogger(),
   verifyTimeoutMs = 8000,
+  attachTimeoutMs = 8000,
 ): Promise<CaptchaResult> {
   const frame = await getCaptchaFrame(page, selectors.captchaFrame);
 
@@ -125,7 +126,7 @@ export async function solveCaptcha(
   await frame
     .locator(selectors.tileImage)
     .last()
-    .waitFor({ state: 'attached', timeout: 8000 })
+    .waitFor({ state: 'attached', timeout: attachTimeoutMs })
     .catch(() => {
       throw new CaptchaError('IFRAME_NOT_READY', 'Captcha tiles did not attach in time.');
     });
@@ -210,6 +211,8 @@ export interface SolveRetryOptions {
   label?: string;
   /** Initial verify-message wait (ms). */
   verifyTimeoutMs?: number;
+  /** How long to wait for captcha tiles to attach (ms). */
+  attachTimeoutMs?: number;
 }
 
 /**
@@ -227,13 +230,14 @@ export async function solveCaptchaWithRetry(
   const tag = opts.label ? `${opts.label} ` : '';
   const total = opts.retries + 1;
   let verifyTimeout = opts.verifyTimeoutMs ?? 8000;
+  const attachTimeout = opts.attachTimeoutMs ?? 8000;
   let attemptNo = 0;
 
   return withRetry(
     async () => {
       attemptNo++;
       log.step(`${tag}captcha attempt ${attemptNo}/${total}…`);
-      const result = await solveCaptcha(page, selectors, solverName, log, verifyTimeout);
+      const result = await solveCaptcha(page, selectors, solverName, log, verifyTimeout, attachTimeout);
       log.info(`${tag}captcha verified ✓ (target ${result.target}, attempt ${attemptNo}/${total})`);
       return result;
     },
